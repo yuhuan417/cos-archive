@@ -1,25 +1,20 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 )
 
-func prepareTestDirTree(tree string) (string, error) {
-	tmpDir, err := ioutil.TempDir("", "")
-	if err != nil {
-		return "", fmt.Errorf("error creating temp directory: %v\n", err)
-	}
-
-	err = os.MkdirAll(filepath.Join(tmpDir, tree), 0755)
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		return "", err
-	}
-
-	return tmpDir, nil
+type FileInfo struct {
+	Name    string
+	Size    int64
+	Mode    os.FileMode
+	ModTime time.Time
+	IsDir   bool
 }
 
 func processSingleFile(path string, info os.FileInfo, subDirToSkip string, err error) error {
@@ -32,34 +27,50 @@ func processSingleFile(path string, info os.FileInfo, subDirToSkip string, err e
 		return filepath.SkipDir
 	}
 	fmt.Printf("visited file or dir: %q\n", path)
-	fmt.Println("name =", info.Name())
-	fmt.Println("size =", info.Size())
-	fmt.Println("mode =", info.Mode())
-	fmt.Println("is link =", info.Mode()&os.ModeSymlink)
-	fmt.Println("modtime =", info.ModTime())
-	fmt.Println("isDir =", info.IsDir())
-	fmt.Println("sys =", info.Sys())
+	f := FileInfo{
+		Name:    info.Name(),
+		Size:    info.Size(),
+		Mode:    info.Mode(),
+		ModTime: info.ModTime(),
+		IsDir:   info.IsDir(),
+	}
+	j, _ := json.Marshal(f)
+	fmt.Println("fileinfo json =", string(j))
 	return nil
 }
 
-func main() {
-	// tmpDir, err := prepareTestDirTree("dir/to/walk/skip")
-	// if err != nil {
-	//	fmt.Printf("unable to create test dir tree: %v\n", err)
-	//	return
-	//}
-	//defer os.RemoveAll(tmpDir)
-	//os.Chdir(tmpDir)
-
-	cwd, err := os.Getwd()
+func backupFiles(config Config) {
 	subDirToSkip := ".git"
-	fmt.Println("On Unix: ", cwd)
-	err = filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		return processSingleFile(path, info, subDirToSkip, err)
-	})
+	for _, filePath := range config.FilePaths {
+		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+			return processSingleFile(path, info, subDirToSkip, err)
+		})
 
-	if err != nil {
-		fmt.Printf("error walking the path %q: %v\n", ".", err)
-		return
+		if err != nil {
+			fmt.Printf("error walking the path %q: %v\n", ".", err)
+			return
+		}
+	}
+}
+
+func fullSync(config Config) {
+}
+
+func restoreFiles(config Config) {
+}
+
+func main() {
+	action := flag.String("action", "", "a string")
+	configPath := flag.String("config", "foo", "a string")
+	flag.Parse()
+
+	config := getConfig(*configPath)
+	fmt.Println(config)
+	if *action == "backup" {
+		backupFiles(config)
+	} else if *action == "fullsync" {
+		fullSync(config)
+	} else if *action == "restore" {
+		restoreFiles(config)
 	}
 }
