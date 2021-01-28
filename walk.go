@@ -15,42 +15,57 @@ type FileInfo struct {
 	Mode    os.FileMode
 	ModTime time.Time
 	IsDir   bool
+	LinkTo	string
 }
 
-func processSingleFile(path string, info os.FileInfo, subDirToSkip string, err error) error {
-	if err != nil {
-		fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", path, err)
+type FileInfoMap = map[string] FileInfo
+
+func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
+	fmt.Println("visited: ", path)
+	if (err != nil) {
+		fmt.Println("err", err)
 		return err
 	}
-	if info.IsDir() && info.Name() == subDirToSkip {
-		fmt.Printf("skipping a dir without errors: %+v \n", info.Name())
-		return filepath.SkipDir
+	for _, skip := range config.SkipList {
+		if info.Name() == skip {
+			return nil
+		}
 	}
-	fmt.Printf("visited file or dir: %q\n", path)
+	if (!info.IsDir() && !info.Mode().IsRegular() && (info.Mode() & os.ModeSymlink == 0)) {
+		fmt.Println("skip: ", path)
+		return nil
+	}
+	link := ""
+	if (info.Mode() & os.ModeSymlink != 0) {
+		link, _ = os.Readlink(path)
+		fmt.Println(path, "link to:", link)
+	}
 	f := FileInfo{
 		Name:    info.Name(),
 		Size:    info.Size(),
 		Mode:    info.Mode(),
 		ModTime: info.ModTime(),
 		IsDir:   info.IsDir(),
+		LinkTo:	link,
 	}
-	j, _ := json.Marshal(f)
-	fmt.Println("fileinfo json =", string(j))
+	index[path] = f
 	return nil
 }
 
 func backupFiles(config Config) {
-	subDirToSkip := ".git"
+	localIndex := make(FileInfoMap)
 	for _, filePath := range config.FilePaths {
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return processSingleFile(path, info, subDirToSkip, err)
+			return processSingleFile(path, info, config, localIndex, err)
 		})
 
 		if err != nil {
 			fmt.Printf("error walking the path %q: %v\n", ".", err)
-			return
+			continue
 		}
 	}
+	j, _ := json.Marshal(localIndex)
+	fmt.Println("fileinfo json =", string(j))
 }
 
 func fullSync(config Config) {
