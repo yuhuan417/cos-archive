@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	FilePaths []string
+	SkipList []string
 	Oss          ossConfig
 }
 
