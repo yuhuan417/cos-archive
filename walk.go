@@ -15,14 +15,15 @@ type FileInfo struct {
 	Mode    os.FileMode
 	ModTime time.Time
 	IsDir   bool
-	LinkTo	string
+	LinkTo  string
+	Hash	string
 }
 
-type FileInfoMap = map[string] FileInfo
+type FileInfoMap = map[string] *FileInfo
 
 func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
 	fmt.Println("visited: ", path)
-	if (err != nil) {
+	if err != nil {
 		fmt.Println("err", err)
 		return err
 	}
@@ -31,12 +32,12 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 			return nil
 		}
 	}
-	if (!info.IsDir() && !info.Mode().IsRegular() && (info.Mode() & os.ModeSymlink == 0)) {
+	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
 		fmt.Println("skip: ", path)
 		return nil
 	}
 	link := ""
-	if (info.Mode() & os.ModeSymlink != 0) {
+	if info.Mode()&os.ModeSymlink != 0 {
 		link, _ = os.Readlink(path)
 		fmt.Println(path, "link to:", link)
 	}
@@ -46,9 +47,9 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 		Mode:    info.Mode(),
 		ModTime: info.ModTime(),
 		IsDir:   info.IsDir(),
-		LinkTo:	link,
+		LinkTo:  link,
 	}
-	index[path] = f
+	index[path] = &f
 	return nil
 }
 
@@ -64,6 +65,16 @@ func backupFiles(config Config) {
 			continue
 		}
 	}
+	for fp, fi := range localIndex {
+		fmt.Println(fp)
+		fmt.Println(fi)
+		if fi.IsDir || fi.LinkTo != "" {
+			continue
+		}
+		h := xunleiHash(fp, *fi)
+		localIndex[fp].Hash = h
+	}
+
 	j, _ := json.Marshal(localIndex)
 	fmt.Println("fileinfo json =", string(j))
 }
