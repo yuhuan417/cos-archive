@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -28,7 +27,7 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 	}
 	for _, skip := range config.SkipList {
 		if info.Name() == skip {
-			errors.New("Skip")
+			return filepath.SkipDir
 		}
 	}
 	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
