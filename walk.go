@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -27,7 +28,7 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 	}
 	for _, skip := range config.SkipList {
 		if info.Name() == skip {
-			return nil
+			errors.New("Skip")
 		}
 	}
 	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
@@ -49,7 +50,7 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 	return nil
 }
 
-func backupFiles(config Config) {
+func generateLocalIndex(config Config) FileInfoMap {
 	localIndex := make(FileInfoMap)
 	for _, filePath := range config.FilePaths {
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
@@ -67,6 +68,11 @@ func backupFiles(config Config) {
 		h := xunleiHash(fp, *fi)
 		localIndex[fp].Hash = h
 	}
+	return localIndex
+}
+
+func backupFiles(config Config) {
+	localIndex := generateLocalIndex(config)
 
 	j, _ := json.MarshalIndent(localIndex, "", "  ")
 	fmt.Println("fileinfo json =", string(j))
