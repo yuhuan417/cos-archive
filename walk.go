@@ -22,9 +22,7 @@ type FileInfo struct {
 type FileInfoMap = map[string] *FileInfo
 
 func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
-	fmt.Println("visited: ", path)
 	if err != nil {
-		fmt.Println("err", err)
 		return err
 	}
 	for _, skip := range config.SkipList {
@@ -33,13 +31,11 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 		}
 	}
 	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
-		fmt.Println("skip: ", path)
 		return nil
 	}
 	link := ""
 	if info.Mode()&os.ModeSymlink != 0 {
 		link, _ = os.Readlink(path)
-		fmt.Println(path, "link to:", link)
 	}
 	f := FileInfo{
 		Name:    info.Name(),
@@ -61,13 +57,10 @@ func backupFiles(config Config) {
 		})
 
 		if err != nil {
-			fmt.Printf("error walking the path %q: %v\n", ".", err)
 			continue
 		}
 	}
 	for fp, fi := range localIndex {
-		fmt.Println(fp)
-		fmt.Println(fi)
 		if fi.IsDir || fi.LinkTo != "" {
 			continue
 		}
@@ -75,7 +68,7 @@ func backupFiles(config Config) {
 		localIndex[fp].Hash = h
 	}
 
-	j, _ := json.Marshal(localIndex)
+	j, _ := json.MarshalIndent(localIndex, "", "  ")
 	fmt.Println("fileinfo json =", string(j))
 }
 
@@ -91,7 +84,6 @@ func main() {
 	flag.Parse()
 
 	config := getConfig(*configPath)
-	fmt.Println(config)
 	if *action == "backup" {
 		backupFiles(config)
 	} else if *action == "fullsync" {

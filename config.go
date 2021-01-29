@@ -4,7 +4,6 @@ import (
 	"io/ioutil"
 	"os"
 	"encoding/json"
-	"fmt"
 )
 
 type Config struct {
@@ -31,7 +30,6 @@ func getConfig(configFileName string) (config Config) {
 	// fmt.Println(string(f))
 
 
-	fmt.Println("Parsing ", configFileName)
 	jsonFile, err := os.Open(configFileName)
 
 	if (err != nil) {
