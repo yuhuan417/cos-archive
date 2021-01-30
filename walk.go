@@ -10,10 +10,9 @@ import (
 )
 
 type FileInfo struct {
-	Name    string
 	Size    int64
 	Mode    os.FileMode
-	ModTime time.Time
+	ModTime int64
 	IsDir   bool
 	LinkTo  string
 	Hash    string
@@ -21,9 +20,19 @@ type FileInfo struct {
 
 type FileInfoMap = map[string]*FileInfo
 
-func loadIndex(path string) FileInfoMap {
+type ChunkInfo struct {
+	Hash string
+	DeleteTime time.Time
+}
+
+type Index struct {
+	Files FileInfoMap
+	Chunks []ChunkInfo
+}
+
+func loadIndex(path string) Index {
 	fmt.Println("loading: ", path)
-	index := make(FileInfoMap)
+	index := Index{}
 	jf, err := os.Open(path)
 	if err != nil {
 		return index
@@ -55,43 +64,45 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 		link, _ = os.Readlink(path)
 	}
 	f := FileInfo{
-		Name:    info.Name(),
-		Size:    info.Size(),
 		Mode:    info.Mode(),
-		ModTime: info.ModTime(),
+		ModTime: info.ModTime().Unix(),
 		IsDir:   info.IsDir(),
 		LinkTo:  link,
+	}
+	if (info.Mode().IsRegular()) {
+		f.Size = info.Size()
 	}
 	index[path] = &f
 	return nil
 }
 
-func generateLocalIndex(config Config, oldIndex FileInfoMap) FileInfoMap {
+func generateLocalIndex(config Config, oldIndex Index) Index {
 	fmt.Println("generate local index: ")
-	localIndex := make(FileInfoMap)
+	localIndex := Index{}
+	localIndex.Files = make(FileInfoMap)
 	for _, filePath := range config.FilePaths {
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return processSingleFile(path, info, config, localIndex, err)
+			return processSingleFile(path, info, config, localIndex.Files, err)
 		})
 
 		if err != nil {
 			continue
 		}
 	}
-	for fp, fi := range localIndex {
+	for fp, fi := range localIndex.Files {
 		if fi.IsDir || fi.LinkTo != "" {
 			continue
 		}
 		h := ""
-		if oldFileInfo, ok := oldIndex[fp]; ok {
-			if oldFileInfo.Size == fi.Size {
+		if oldFileInfo, ok := oldIndex.Files[fp]; ok {
+			if oldFileInfo.Size == fi.Size && oldFileInfo.Hash != "" {
 				h = oldFileInfo.Hash
 			}
 		}
 		if h == "" {
 			h = xunleiHash(fp, *fi)
 		}
-		localIndex[fp].Hash = h
+		localIndex.Files[fp].Hash = h
 	}
 	return localIndex
 }

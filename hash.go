@@ -15,15 +15,11 @@ func xunleiHash(path string, info FileInfo) string {
 	if size < 0xF000 {
 		io.Copy(h, f)
 	} else {
-		b := make([]byte, 0x5000)
-		io.ReadFull(f, b)
-		h.Write(b)
+		io.CopyN(h, f, 0x5000)
 		f.Seek(size/3, 0)
-		io.ReadFull(f, b)
-		h.Write(b)
+		io.CopyN(h, f, 0x5000)
 		f.Seek(size-0x5000, 0)
-		io.ReadFull(f, b)
-		h.Write(b)
+		io.CopyN(h, f, 0x5000)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
