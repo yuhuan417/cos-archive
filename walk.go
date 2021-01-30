@@ -21,12 +21,12 @@ type FileInfo struct {
 type FileInfoMap = map[string]*FileInfo
 
 type ChunkInfo struct {
-	Hash string
+	Hash       string
 	DeleteTime time.Time
 }
 
 type Index struct {
-	Files FileInfoMap
+	Files  FileInfoMap
 	Chunks []ChunkInfo
 }
 
@@ -51,9 +51,11 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 	if err != nil {
 		return err
 	}
-	for _, skip := range config.SkipList {
-		if info.Name() == skip {
-			return filepath.SkipDir
+	if info.IsDir() {
+		for _, skip := range config.SkipList {
+			if info.Name() == skip {
+				return filepath.SkipDir
+			}
 		}
 	}
 	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
@@ -69,7 +71,7 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 		IsDir:   info.IsDir(),
 		LinkTo:  link,
 	}
-	if (info.Mode().IsRegular()) {
+	if info.Mode().IsRegular() {
 		f.Size = info.Size()
 	}
 	index[path] = &f
