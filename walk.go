@@ -16,10 +16,27 @@ type FileInfo struct {
 	ModTime time.Time
 	IsDir   bool
 	LinkTo  string
-	Hash	string
+	Hash    string
 }
 
-type FileInfoMap = map[string] *FileInfo
+type FileInfoMap = map[string]*FileInfo
+
+func loadIndex(path string) FileInfoMap {
+	fmt.Println("loading: ", path)
+	index := make(FileInfoMap)
+	jf, err := os.Open(path)
+	if err != nil {
+		return index
+	}
+	defer jf.Close()
+
+	jsonParser := json.NewDecoder(jf)
+	if err = jsonParser.Decode(&index); err != nil {
+		return index
+	}
+
+	return index
+}
 
 func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
 	if err != nil {
@@ -49,7 +66,8 @@ func processSingleFile(path string, info os.FileInfo, config Config, index FileI
 	return nil
 }
 
-func generateLocalIndex(config Config) FileInfoMap {
+func generateLocalIndex(config Config, oldIndex FileInfoMap) FileInfoMap {
+	fmt.Println("generate local index: ")
 	localIndex := make(FileInfoMap)
 	for _, filePath := range config.FilePaths {
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
@@ -64,14 +82,23 @@ func generateLocalIndex(config Config) FileInfoMap {
 		if fi.IsDir || fi.LinkTo != "" {
 			continue
 		}
-		h := xunleiHash(fp, *fi)
+		h := ""
+		if oldFileInfo, ok := oldIndex[fp]; ok {
+			if oldFileInfo.Size == fi.Size {
+				h = oldFileInfo.Hash
+			}
+		}
+		if h == "" {
+			h = xunleiHash(fp, *fi)
+		}
 		localIndex[fp].Hash = h
 	}
 	return localIndex
 }
 
 func backupFiles(config Config) {
-	localIndex := generateLocalIndex(config)
+	oldIndex := loadIndex("log.old")
+	localIndex := generateLocalIndex(config, oldIndex)
 
 	j, _ := json.MarshalIndent(localIndex, "", "  ")
 	fmt.Println("fileinfo json =", string(j))
