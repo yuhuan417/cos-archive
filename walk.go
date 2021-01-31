@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
+	// "time"
 )
 
 type FileInfo struct {
@@ -21,27 +21,28 @@ type FileInfo struct {
 type FileInfoMap = map[string]*FileInfo
 
 type ChunkInfo struct {
-	Hash       string
-	DeleteTime time.Time
+	DeleteTime int64
 }
 
-type ChunksMap = map[string]string
+type ChunkInfoMap = map[string]*ChunkInfo
 
 type Index struct {
 	Files     FileInfoMap
-	Chunks    []ChunkInfo
-	chunksMap ChunksMap
+	Chunks    ChunkInfoMap
 }
 
-func buildChunksMap(index *Index) {
-	index.chunksMap = make(ChunksMap)
-	for fp, fi := range index.Files {
+type ChunksMap = map[string] bool
+
+func buildChunksMap(index Index) ChunksMap{
+	chunksMap := make(ChunksMap)
+	for _, fi := range index.Files {
 		if fi.IsDir || fi.LinkTo != "" {
 			continue
 		}
 
-		index.chunksMap[chunkHash(fi)] = fp
+		chunksMap[chunkHash(fi)] = false
 	}
+	return chunksMap
 }
 
 func loadIndex(path string) Index {
@@ -57,8 +58,6 @@ func loadIndex(path string) Index {
 	if err = jsonParser.Decode(&index); err != nil {
 		return index
 	}
-
-	buildChunksMap(&index)
 
 	return index
 }
@@ -98,7 +97,7 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 	fmt.Println("generate local index: ")
 	localIndex := Index{}
 	localIndex.Files = make(FileInfoMap)
-	localIndex.chunksMap = make(ChunksMap)
+	localIndex.Chunks = make(ChunkInfoMap)
 	for _, filePath := range config.FilePaths {
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
 			return processSingleFile(path, info, &config, localIndex.Files, err)
@@ -122,13 +121,14 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 			h = xunleiHash(fp, fi)
 		}
 		fi.Hash = h
-		localIndex.chunksMap[chunkHash(fi)] = fp
 	}
 	return localIndex
 }
 
 func backupFiles(config Config) {
 	oldIndex := loadIndex("log.old")
+	chunkSet := buildChunksMap(oldIndex)
+	_ = chunkSet
 	localIndex := generateLocalIndex(config, oldIndex)
 
 	j, _ := json.MarshalIndent(localIndex, "", "  ")
