@@ -97,6 +97,7 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 	fmt.Println("generate local index: ")
 	localIndex := Index{}
 	localIndex.Files = make(FileInfoMap)
+	localIndex.chunksMap = make(ChunksMap)
 	for _, filePath := range config.FilePaths {
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
 			return processSingleFile(path, info, &config, localIndex.Files, err)
