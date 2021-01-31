@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-func xunleiHash(path string, info FileInfo) string {
+func xunleiHash(path string, info *FileInfo) string {
 	h := sha1.New()
 	size := info.Size
 	f, _ := os.Open(path)

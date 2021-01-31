@@ -25,9 +25,22 @@ type ChunkInfo struct {
 	DeleteTime time.Time
 }
 
+type ChunksMap = map[string]string
+
 type Index struct {
-	Files  FileInfoMap
-	Chunks []ChunkInfo
+	Files     FileInfoMap
+	Chunks    []ChunkInfo
+	chunksMap ChunksMap
+}
+
+func buildChunksMap(index *Index) {
+	for fp, fi := range index.Files {
+		if fi.IsDir || fi.LinkTo != "" {
+			continue
+		}
+
+		index.chunksMap[fi.Hash] = fp
+	}
 }
 
 func loadIndex(path string) Index {
@@ -44,10 +57,12 @@ func loadIndex(path string) Index {
 		return index
 	}
 
+	buildChunksMap(&index)
+
 	return index
 }
 
-func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
+func processSingleFile(path string, info os.FileInfo, config *Config, index FileInfoMap, err error) error {
 	if err != nil {
 		return err
 	}
@@ -84,7 +99,7 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 	localIndex.Files = make(FileInfoMap)
 	for _, filePath := range config.FilePaths {
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return processSingleFile(path, info, config, localIndex.Files, err)
+			return processSingleFile(path, info, &config, localIndex.Files, err)
 		})
 
 		if err != nil {
@@ -102,7 +117,7 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 			}
 		}
 		if h == "" {
-			h = xunleiHash(fp, *fi)
+			h = xunleiHash(fp, fi)
 		}
 		localIndex.Files[fp].Hash = h
 	}
