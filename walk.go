@@ -112,7 +112,7 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 		}
 		h := ""
 		if oldFileInfo, ok := oldIndex.Files[fp]; ok {
-			if oldFileInfo.Size == fi.Size && oldFileInfo.Hash != "" {
+			if oldFileInfo.Size == fi.Size && oldFileInfo.ModTime == fi.ModTime && oldFileInfo.Hash != "" {
 				h = oldFileInfo.Hash
 			}
 		}
@@ -120,6 +120,7 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 			h = xunleiHash(fp, fi)
 		}
 		localIndex.Files[fp].Hash = h
+		localIndex.chunksMap[h] = fp
 	}
 	return localIndex
 }
