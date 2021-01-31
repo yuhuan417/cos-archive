@@ -23,3 +23,7 @@ func xunleiHash(path string, info *FileInfo) string {
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
+
+func chunkHash(fi *FileInfo) string {
+	return string(fi.Size) + ":" + fi.Hash
+}

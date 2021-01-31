@@ -32,8 +32,7 @@
 
 | name             | type   | Description      |
 | ---------------- | ------ | ---------------- |
-| hash             | string | PK sha256+size   ｜
-| upload_time      | time   | 上传完成的时间，为0表示尚未上传 |
+| hash             | string | xunlei+size   ｜
 | delete_mark_time | time   | 删除标记的时间          |
 
 ### FileInfo
@@ -44,12 +43,8 @@
 | symbol_link | string  | 符号链接目标路径，为""表示不是符号链接 |
 | permission  | uint32  | 文件权限                 |
 | size        | int64   | 文件大小                 |
-| ctime       | int64   | ctime                |
 | mtime       | int64   | mtime                |
-| atime       | int64   | atime                |
-| uid         | int     | uid                  |
-| gid         | int     | gid                  |
-| hash        | string  | sha256+size，为空表示尚未计算 |
+| hash        | string  | xunlei+size，为空表示尚未计算 |
 | directory   | boolean | 是否是目录                |
 
 

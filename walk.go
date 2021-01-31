@@ -34,12 +34,13 @@ type Index struct {
 }
 
 func buildChunksMap(index *Index) {
+	index.chunksMap = make(ChunksMap)
 	for fp, fi := range index.Files {
 		if fi.IsDir || fi.LinkTo != "" {
 			continue
 		}
 
-		index.chunksMap[fi.Hash] = fp
+		index.chunksMap[chunkHash(fi)] = fp
 	}
 }
 
@@ -120,8 +121,8 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 		if h == "" {
 			h = xunleiHash(fp, fi)
 		}
-		localIndex.Files[fp].Hash = h
-		localIndex.chunksMap[h] = fp
+		fi.Hash = h
+		localIndex.chunksMap[chunkHash(fi)] = fp
 	}
 	return localIndex
 }
