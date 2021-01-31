@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	// "time"
+	"time"
 )
 
 type FileInfo struct {
@@ -20,15 +20,11 @@ type FileInfo struct {
 
 type FileInfoMap = map[string]*FileInfo
 
-type ChunkInfo struct {
-	DeleteTime int64
-}
-
-type ChunkInfoMap = map[string]*ChunkInfo
+type ChunkDeleteMarkMap = map[string] int64
 
 type Index struct {
 	Files     FileInfoMap
-	Chunks    ChunkInfoMap
+	Chunks    ChunkDeleteMarkMap
 }
 
 type ChunksMap = map[string] bool
@@ -93,11 +89,11 @@ func processSingleFile(path string, info os.FileInfo, config *Config, index File
 	return nil
 }
 
-func generateLocalIndex(config Config, oldIndex Index) Index {
+func generateLocalIndex(config Config, remoteIndex Index) Index {
 	fmt.Println("generate local index: ")
 	localIndex := Index{}
 	localIndex.Files = make(FileInfoMap)
-	localIndex.Chunks = make(ChunkInfoMap)
+	localIndex.Chunks = make(ChunkDeleteMarkMap)
 	for _, filePath := range config.FilePaths {
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
 			return processSingleFile(path, info, &config, localIndex.Files, err)
@@ -112,9 +108,9 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 			continue
 		}
 		h := ""
-		if oldFileInfo, ok := oldIndex.Files[fp]; ok {
-			if oldFileInfo.Size == fi.Size && oldFileInfo.ModTime == fi.ModTime && oldFileInfo.Hash != "" {
-				h = oldFileInfo.Hash
+		if remoteFileInfo, ok := remoteIndex.Files[fp]; ok {
+			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime && remoteFileInfo.Hash != "" {
+				h = remoteFileInfo.Hash
 			}
 		}
 		if h == "" {
@@ -125,11 +121,54 @@ func generateLocalIndex(config Config, oldIndex Index) Index {
 	return localIndex
 }
 
+func uploadPayload(path string, hash string) {
+	fmt.Println("Upload " + path + " as " + hash)
+}
+
+func uploadFiles(config Config, localIndex Index, remoteIndex Index) {
+	deleteTime := time.Now().AddDate(0, 1, 0).Unix()
+	remoteChunkMap := buildChunksMap(remoteIndex)
+	localChunkMap := buildChunksMap(localIndex)
+
+	localIndex.Chunks = make(ChunkDeleteMarkMap)
+	for k, v := range remoteIndex.Chunks {
+		localIndex.Chunks[k] = v
+	}
+	for fp, fi := range localIndex.Files {
+		if fi.IsDir || fi.LinkTo != "" {
+			continue
+		}
+
+		h := chunkHash(fi)
+		// 检查相同的chunk是否已经处理过
+		lc, _ := localChunkMap[h]
+		if lc {
+			continue
+		}
+
+		localChunkMap[h] = true
+		_, ok := remoteChunkMap[h]
+		if ok {
+			remoteChunkMap[h] = true
+			delete(localIndex.Chunks, h)
+		} else {
+			// 需要上传
+			uploadPayload(fp, h)
+		}
+	}
+	for k, v := range remoteChunkMap {
+		if !v {
+			localIndex.Chunks[k] = deleteTime
+		}
+	}
+}
+
+
 func backupFiles(config Config) {
-	oldIndex := loadIndex("log.old")
-	chunkSet := buildChunksMap(oldIndex)
-	_ = chunkSet
-	localIndex := generateLocalIndex(config, oldIndex)
+	remoteIndex := loadIndex("log.old")
+	localIndex := generateLocalIndex(config, remoteIndex)
+
+	uploadFiles(config, localIndex, remoteIndex)
 
 	j, _ := json.MarshalIndent(localIndex, "", "  ")
 	fmt.Println("fileinfo json =", string(j))
