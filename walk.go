@@ -199,22 +199,22 @@ func backupFiles(config Config) {
 	fmt.Println("fileinfo json =", string(j))
 }
 
-func fullSync(config Config) {
+func fsckRemote(config Config) {
 }
 
 func restoreFiles(config Config) {
 }
 
 func main() {
-	action := flag.String("action", "", "a string")
-	configPath := flag.String("config", "foo", "a string")
+	action := flag.String("action", "backup", "a string")
+	configPath := flag.String("config", "config.json", "a string")
 	flag.Parse()
 
 	config := getConfig(*configPath)
 	if *action == "backup" {
 		backupFiles(config)
-	} else if *action == "fullsync" {
-		fullSync(config)
+	} else if *action == "fsck" {
+		fsckRemote(config)
 	} else if *action == "restore" {
 		restoreFiles(config)
 	}
