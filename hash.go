@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
+	"strconv"
 )
 
 func xunleiHash(path string, info *FileInfo) string {
@@ -25,5 +26,5 @@ func xunleiHash(path string, info *FileInfo) string {
 }
 
 func chunkHash(fi *FileInfo) string {
-	return string(fi.Size) + ":" + fi.Hash
+	return strconv.FormatInt(fi.Size, 10) + "-" + fi.Hash
 }

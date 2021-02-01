@@ -32,7 +32,7 @@
 
 | name             | type   | Description      |
 | ---------------- | ------ | ---------------- |
-| hash             | string | xunlei+size   ｜
+| hash             | string | xunlei+size   |
 | delete_mark_time | time   | 删除标记的时间          |
 
 ### FileInfo

@@ -9,6 +9,7 @@ import (
 type Config struct {
 	FilePaths []string
 	SkipList []string
+	Threads	int
 	Oss          ossConfig
 }
 
@@ -29,6 +30,8 @@ func getConfig(configFileName string) (config Config) {
 	// f, _ := json.Marshal(config)
 	// fmt.Println(string(f))
 
+	// default value
+	config.Threads = 4
 
 	jsonFile, err := os.Open(configFileName)
 
