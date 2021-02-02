@@ -10,6 +10,8 @@ type Config struct {
 	FilePaths []string
 	SkipList  []string
 	Threads   int
+	Retry   int
+	WorkingDir string
 	COS       COSConfig
 }
 

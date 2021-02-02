@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"path"
 )
 
 type FileInfo struct {
@@ -24,20 +25,7 @@ type ChunkDeleteMarkMap = map[string] int64
 type Index struct {
 	Files     FileInfoMap
 	Chunks    ChunkDeleteMarkMap
-}
-
-type ChunksMap = map[string] bool
-
-func buildChunksMap(index Index) ChunksMap{
-	chunksMap := make(ChunksMap)
-	for _, fi := range index.Files {
-		if fi.IsDir || fi.LinkTo != "" {
-			continue
-		}
-
-		chunksMap[chunkHash(fi)] = false
-	}
-	return chunksMap
+	fromCOS bool  // true: 云端 false: 云端加载失败，此时需要在上传时检测chunk是否已经存在，避免重复上传浪费
 }
 
 func loadIndex(path string) Index {
@@ -118,13 +106,34 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 	return localIndex
 }
 
+func getRemoteIndex(config Config) Index {
+	old_ri_path := path.Join(config.WorkingDir, "meta.json")
+	mh := metaHash(old_ri_path)
+	rh := getRemoteMetaHash(config)
+
+	ri_path := ""
+	fromCOS := false
+	if mh == rh {
+		ri_path = old_ri_path
+		fromCOS = true
+	} else {
+		ri_path = path.Join(config.WorkingDir, "meta.remote.json")
+		fromCOS = downloadRemoteIndex(config, ri_path)
+	}
+	ri := loadIndex(ri_path)
+	ri.fromCOS = fromCOS
+	return ri
+}
+
 func backupFiles(config Config) {
-	remoteIndex := loadIndex("log.old")
+	remoteIndex := getRemoteIndex(config)
+	// remoteIndex := loadIndex("log.old")
 	localIndex := generateLocalIndex(config, remoteIndex)
 
 	uploadFiles(config, &localIndex, &remoteIndex)
 
 	j, _ := json.MarshalIndent(localIndex, "", "  ")
+	uploadRemoteIndex(config, j)
 	fmt.Println("fileinfo json =", string(j))
 }
 

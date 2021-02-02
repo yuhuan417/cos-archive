@@ -8,6 +8,14 @@ import (
 	"strconv"
 )
 
+func metaHash(path string) string {
+	h := sha1.New()
+	f, _ := os.Open(path)
+	defer f.Close()
+	io.Copy(h, f)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func xunleiHash(path string, info *FileInfo) string {
 	h := sha1.New()
 	size := info.Size
