@@ -1,23 +1,23 @@
 package main
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
-	"encoding/json"
 )
 
 type Config struct {
 	FilePaths []string
-	SkipList []string
-	Threads	int
-	Oss          ossConfig
+	SkipList  []string
+	Threads   int
+	COS       COSConfig
 }
 
-type ossConfig struct {
-	OssKey     string
-	OssSecret  string
-	BucketName string
-	APIPrefix  string
+type COSConfig struct {
+	URL    string
+	ID     string
+	Key    string
+	Prefix string
 }
 
 func getConfig(configFileName string) (config Config) {
@@ -31,11 +31,11 @@ func getConfig(configFileName string) (config Config) {
 	// fmt.Println(string(f))
 
 	// default value
-	config.Threads = 4
+	config.Threads = 2
 
 	jsonFile, err := os.Open(configFileName)
 
-	if (err != nil) {
+	if err != nil {
 		return
 	}
 

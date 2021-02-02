@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"net/url"
 	"sync"
 	"time"
+
+	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
 type UploadCTX struct {
@@ -11,10 +16,31 @@ type UploadCTX struct {
 	hash string
 }
 
-func uploadPayload(ctx UploadCTX) {
+func uploadPayload(config Config, ctx UploadCTX) {
 	fmt.Println("Upload " + ctx.path + " as " + ctx.hash)
-}
+	u, _ := url.Parse(config.COS.URL)
+	b := &cos.BaseURL{BucketURL: u}
+	c := cos.NewClient(b, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  config.COS.ID,
+			SecretKey: config.COS.Key,
+		},
+	})
 
+	opt := &cos.MultiUploadOptions{
+		ThreadPoolSize: 2,
+		OptIni: &cos.InitiateMultipartUploadOptions{
+			ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{
+				XCosStorageClass: "ARCHIVE",
+			},
+		},
+	}
+	_, _, err := c.Object.Upload(
+		context.Background(), config.COS.Prefix+"/"+ctx.hash, ctx.path, opt)
+	if err != nil {
+		panic(err)
+	}
+}
 
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	deleteTime := time.Now().AddDate(0, 1, 0).Unix()
@@ -31,7 +57,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	uploadFile := func(id int) {
 		defer wg.Done()
 		for ctx := range ch {
-			uploadPayload(ctx)
+			uploadPayload(config, ctx)
 		}
 	}
 	wg.Add(config.Threads)
