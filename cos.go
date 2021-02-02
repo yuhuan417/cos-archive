@@ -48,6 +48,7 @@ func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 	if !notCheckBeforeUpload {
 		_, err := c.Object.Head(context.Background(), rp, nil)
 		if err == nil {
+			fmt.Println("Skip " + ctx.path + " as " + ctx.hash)
 			return
 		}
 	}
