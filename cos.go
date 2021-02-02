@@ -82,7 +82,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	uploadFile := func(id int) {
 		defer wg.Done()
 		for ctx := range ch {
-			uploadPayload(config, remoteIndex.fromCOS, ctx)
+			uploadPayload(config, false, ctx)
 		}
 	}
 	wg.Add(config.Threads)
