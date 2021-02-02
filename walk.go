@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"path"
@@ -127,14 +126,12 @@ func getRemoteIndex(config Config) Index {
 
 func backupFiles(config Config) {
 	remoteIndex := getRemoteIndex(config)
-	// remoteIndex := loadIndex("log.old")
 	localIndex := generateLocalIndex(config, remoteIndex)
 
 	uploadFiles(config, &localIndex, &remoteIndex)
 
 	j, _ := json.MarshalIndent(localIndex, "", "  ")
 	uploadRemoteIndex(config, j)
-	fmt.Println("fileinfo json =", string(j))
 }
 
 func fsckRemote(config Config) {

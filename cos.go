@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -34,7 +33,6 @@ func buildChunksMap(index Index) ChunksMap {
 }
 
 func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
-	fmt.Println("Upload " + ctx.path + " as " + ctx.hash)
 	u, _ := url.Parse(config.COS.URL)
 	b := &cos.BaseURL{BucketURL: u}
 	c := cos.NewClient(b, &http.Client{
@@ -48,7 +46,6 @@ func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 	if !notCheckBeforeUpload {
 		_, err := c.Object.Head(context.Background(), rp, nil)
 		if err == nil {
-			fmt.Println("Skip " + ctx.path + " as " + ctx.hash)
 			return
 		}
 	}
@@ -105,13 +102,16 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 		_, ok := remoteChunkMap[h]
 		if ok {
 			remoteChunkMap[h] = true
-			delete(localIndex.Chunks, h)
 		} else {
 			// 需要上传
 			ctx := new(UploadCTX)
 			ctx.path = fp
 			ctx.hash = h
 			ch <- *ctx
+		}
+		_, ok = remoteIndex.Chunks[h]
+		if ok {
+			delete(localIndex.Chunks, h)
 		}
 	}
 
@@ -187,7 +187,6 @@ func getRemoteMetaHash(config Config) string {
 	})
 	resp, err := c.Object.Head(context.Background(), "meta.json", nil)
 	if err != nil {
-		fmt.Println("remote meta not found.")
 		return ""
 	}
 	return resp.Header.Get("x-cos-meta-hash")
