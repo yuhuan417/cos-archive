@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
-	"path/filepath"
 	"path"
+	"path/filepath"
+	"time"
 )
 
 type FileInfo struct {
@@ -19,16 +21,18 @@ type FileInfo struct {
 
 type FileInfoMap = map[string]*FileInfo
 
-type ChunkDeleteMarkMap = map[string] int64
+type ChunkDeleteMarkMap = map[string]int64
 
 type Index struct {
-	Files     FileInfoMap
-	Chunks    ChunkDeleteMarkMap
-	fromCOS bool  // true: 云端 false: 云端加载失败，此时需要在上传时检测chunk是否已经存在，避免重复上传浪费
+	Files   FileInfoMap
+	Chunks  ChunkDeleteMarkMap
+	fromCOS bool // true: 云端 false: 云端加载失败，此时需要在上传时检测chunk是否已经存在，避免重复上传浪费
 }
 
 func loadIndex(path string) Index {
 	index := Index{}
+	index.Files = make(FileInfoMap)
+	index.Chunks = make(ChunkDeleteMarkMap)
 	jf, err := os.Open(path)
 	if err != nil {
 		return index
@@ -135,6 +139,48 @@ func backupFiles(config Config) {
 }
 
 func fsckRemote(config Config) {
+	ri_path := path.Join(config.WorkingDir, "meta.remote.json")
+	if !downloadRemoteIndex(config, ri_path) {
+		return
+	}
+	ri := loadIndex(ri_path)
+
+	deleteOutdatedChunks(config, &ri)
+
+	cm := scanRemoteChunksMap(config)
+
+	for fp, fi := range ri.Files {
+		if fi.IsDir || fi.LinkTo != "" {
+			continue
+		}
+		ch := chunkHash(fi)
+		_, ok := cm[ch]
+		if ok {
+			cm[ch] = true
+		} else {
+			delete(ri.Files, fp)
+		}
+	}
+
+	for k, _ := range ri.Chunks {
+		_, ok := cm[k]
+		if ok {
+			cm[k] = true
+		} else {
+			delete(ri.Chunks, k)
+		}
+	}
+
+	forever := time.Now().AddDate(10, 0, 0).Unix()
+	for k, v := range cm {
+		if !v {
+			ri.Chunks[k] = forever
+		}
+	}
+
+	j, _ := json.MarshalIndent(ri, "", "  ")
+	fmt.Println(string(j))
+	uploadRemoteIndex(config, j)
 }
 
 func restoreFiles(config Config) {

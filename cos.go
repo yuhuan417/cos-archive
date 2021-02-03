@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -71,6 +73,9 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 
 	localIndex.Chunks = make(ChunkDeleteMarkMap)
 	for k, v := range remoteIndex.Chunks {
+		if v > deleteTime {
+			v = deleteTime
+		}
 		localIndex.Chunks[k] = v
 	}
 	wg := &sync.WaitGroup{}
@@ -190,4 +195,62 @@ func getRemoteMetaHash(config Config) string {
 		return ""
 	}
 	return resp.Header.Get("x-cos-meta-hash")
+}
+
+func deleteOutdatedChunks(config Config, index *Index) {
+	now := time.Now().Unix()
+	u, _ := url.Parse(config.COS.URL)
+	b := &cos.BaseURL{BucketURL: u}
+	c := cos.NewClient(b, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  config.COS.ID,
+			SecretKey: config.COS.Key,
+		},
+	})
+	for fp, t := range index.Chunks {
+		if now > t {
+			_, err := c.Object.Delete(context.Background(), fp)
+			if err != nil {
+				continue
+			}
+			delete(index.Chunks, fp)
+		}
+	}
+}
+
+func scanRemoteChunksMap(config Config) ChunksMap {
+	cm := make(ChunksMap)
+	u, _ := url.Parse(config.COS.URL)
+	b := &cos.BaseURL{BucketURL: u}
+	c := cos.NewClient(b, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  config.COS.ID,
+			SecretKey: config.COS.Key,
+		},
+	})
+
+	opt := &cos.BucketGetOptions{
+		Prefix:  config.COS.Prefix,
+		MaxKeys: 1000,
+	}
+	for {
+		v, _, err := c.Bucket.Get(context.Background(), opt)
+		if err != nil {
+			panic(err)
+		}
+		prefix := filepath.Clean(config.COS.Prefix) + "/"
+		for _, c := range v.Contents {
+			s := c.Key
+			cm[strings.TrimPrefix(s, prefix)] = false
+		}
+		if !v.IsTruncated {
+			break
+		}
+		opt = &cos.BucketGetOptions{
+			Prefix:  config.COS.Prefix,
+			MaxKeys: 1000,
+			Marker:  v.NextMarker,
+		}
+	}
+	return cm
 }
