@@ -1,0 +1,43 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+)
+
+type FileInfo struct {
+	Size    int64
+	Mode    os.FileMode
+	ModTime int64
+	IsDir   bool
+	LinkTo  string
+	Hash    string
+}
+
+type FileInfoMap = map[string]*FileInfo
+
+type ChunkDeleteMarkMap = map[string]int64
+
+type Index struct {
+	Files   FileInfoMap
+	Chunks  ChunkDeleteMarkMap
+	fromCOS bool // true: 云端 false: 云端加载失败，此时需要在上传时检测chunk是否已经存在，避免重复上传浪费
+}
+
+func loadIndex(path string) Index {
+	index := Index{}
+	index.Files = make(FileInfoMap)
+	index.Chunks = make(ChunkDeleteMarkMap)
+	jf, err := os.Open(path)
+	if err != nil {
+		return index
+	}
+	defer jf.Close()
+
+	jsonParser := json.NewDecoder(jf)
+	if err = jsonParser.Decode(&index); err != nil {
+		return index
+	}
+
+	return index
+}
