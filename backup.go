@@ -2,29 +2,29 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
 
-	"github.com/golang/glog"
 )
 
 func processSingleFile(path string, info os.FileInfo, config *Config, index FileInfoMap, err error) error {
-	glog.Info("Processsing: ", path)
+	log.Println("Processsing: ", path)
 	if err != nil {
-		glog.Info("On error: ", err, " Skip: ", path)
+		log.Println("On error: ", err, " Skip: ", path)
 		return err
 	}
 	if info.IsDir() {
 		for _, skip := range config.SkipList {
-			glog.Info("In skiplist: ", skip, " Skip: ", path)
+			log.Println("In skiplist: ", skip, " Skip: ", path)
 			if info.Name() == skip {
 				return filepath.SkipDir
 			}
 		}
 	}
 	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
-		glog.Info("Skip non-regular file: ", path)
+		log.Println("Skip non-regular file: ", path)
 		return nil
 	}
 	link := ""
