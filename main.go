@@ -14,6 +14,8 @@ func main() {
 		backupFiles(config)
 	} else if *action == "fsck" {
 		fsckRemote(config)
+	} else if *action == "verify" {
+		verifyFiles(config)
 	} else if *action == "restore" {
 		restoreFiles(config)
 	}
