@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
@@ -35,6 +36,7 @@ func buildChunksMap(index Index) ChunksMap {
 }
 
 func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
+	glog.Info("Uploading:", ctx)
 	u, _ := url.Parse(config.COS.URL)
 	b := &cos.BaseURL{BucketURL: u}
 	c := cos.NewClient(b, &http.Client{
@@ -48,6 +50,7 @@ func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 	if !notCheckBeforeUpload {
 		_, err := c.Object.Head(context.Background(), rp, nil)
 		if err == nil {
+			glog.Info("File already exists:", ctx)
 			return
 		}
 	}
@@ -62,7 +65,7 @@ func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 	_, _, err := c.Object.Upload(
 		context.Background(), rp, ctx.path, opt)
 	if err != nil {
-		panic(err)
+		glog.Fatal("Upload file error:", ctx, err)
 	}
 }
 
@@ -125,6 +128,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 
 	for k, v := range remoteChunkMap {
 		if !v {
+			glog.Info("Marking delete chunk:", k)
 			localIndex.Chunks[k] = deleteTime
 		}
 	}
@@ -142,6 +146,7 @@ func downloadRemoteIndex(config Config, path string) bool {
 
 	_, err := c.Object.GetToFile(context.Background(), "meta.json", path, nil)
 	if err != nil {
+		glog.Warning("Download index error:", err)
 		return false
 	}
 	return true
@@ -174,7 +179,7 @@ func uploadRemoteIndex(config Config, content []byte) {
 		_, _, err := c.Object.Upload(
 			context.Background(), "meta.json", tmpfp, opt)
 		if err != nil {
-			panic(err)
+			glog.Fatal("Upload index fail:", err)
 		}
 	}
 	fp := path.Join(config.WorkingDir, "meta.json")
@@ -209,6 +214,7 @@ func deleteOutdatedChunks(config Config, index *Index) {
 	})
 	for fp, t := range index.Chunks {
 		if now > t {
+			glog.Info("Deleting remote chunk: ", fp)
 			_, err := c.Object.Delete(context.Background(), fp)
 			if err != nil {
 				continue
@@ -236,7 +242,7 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 	for {
 		v, _, err := c.Bucket.Get(context.Background(), opt)
 		if err != nil {
-			panic(err)
+			glog.Fatal("Scan error:", err)
 		}
 		prefix := filepath.Clean(config.COS.Prefix) + "/"
 		for _, c := range v.Contents {

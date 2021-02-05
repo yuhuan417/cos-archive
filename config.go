@@ -23,15 +23,6 @@ type COSConfig struct {
 }
 
 func getConfig(configFileName string) (config Config) {
-	// config.FilePaths = []string{"aa", "bb"}
-	// config.Oss.OssKey = "k"
-	// config.Oss.OssSecret = "s"
-	// config.Oss.BucketName = "b"
-	// config.Oss.APIPrefix = "a"
-
-	// f, _ := json.Marshal(config)
-	// fmt.Println(string(f))
-
 	// default value
 	config.Threads = 2
 
