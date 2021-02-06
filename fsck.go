@@ -9,7 +9,7 @@ import (
 )
 
 func fsckRemote(config Config) {
-	ri_path := path.Join(config.WorkingDir, config.COS.Index + ".remote")
+	ri_path := path.Join(config.WorkingDir, config.Index + ".remote")
 	if !downloadRemoteIndex(config, ri_path) {
 		return
 	}

@@ -145,7 +145,7 @@ func downloadRemoteIndex(config Config, path string) bool {
 		},
 	})
 
-	_, err := c.Object.GetToFile(context.Background(), config.COS.Index, path, nil)
+	_, err := c.Object.GetToFile(context.Background(), config.Index, path, nil)
 	if err != nil {
 		log.Println("Download index error:", err)
 		return false
@@ -164,7 +164,7 @@ func uploadRemoteIndex(config Config, content []byte) {
 	})
 
 	rh := getRemoteMetaHash(config)
-	tmpfp := path.Join(config.WorkingDir, config.COS.Index + ".new")
+	tmpfp := path.Join(config.WorkingDir, config.Index + ".new")
 	ioutil.WriteFile(tmpfp, content, 0666)
 	lh := metaHash(tmpfp)
 	if rh != lh {
@@ -178,12 +178,12 @@ func uploadRemoteIndex(config Config, content []byte) {
 			},
 		}
 		_, _, err := c.Object.Upload(
-			context.Background(), config.COS.Index, tmpfp, opt)
+			context.Background(), config.Index, tmpfp, opt)
 		if err != nil {
 			log.Fatalln("Upload index fail:", err)
 		}
 	}
-	fp := path.Join(config.WorkingDir, config.COS.Index)
+	fp := path.Join(config.WorkingDir, config.Index)
 	os.Rename(tmpfp, fp)
 }
 
@@ -196,7 +196,7 @@ func getRemoteMetaHash(config Config) string {
 			SecretKey: config.COS.Key,
 		},
 	})
-	resp, err := c.Object.Head(context.Background(), config.COS.Index, nil)
+	resp, err := c.Object.Head(context.Background(), config.Index, nil)
 	if err != nil {
 		return ""
 	}

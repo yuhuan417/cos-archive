@@ -10,8 +10,8 @@ type Config struct {
 	FilePaths []string
 	SkipList  []string
 	Threads   int
-	Retry   int
 	WorkingDir string
+	Index	string
 	COS       COSConfig
 }
 
@@ -20,12 +20,13 @@ type COSConfig struct {
 	ID     string
 	Key    string
 	ChunkPrefix string
-	Index	string
 }
 
 func getConfig(configFileName string) (config Config) {
 	// default value
 	config.Threads = 2
+	config.Index = "meta.json"
+	config.COS.ChunkPrefix = "data/"
 
 	jsonFile, err := os.Open(configFileName)
 
