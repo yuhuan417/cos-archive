@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"path"
 	"time"
@@ -11,6 +10,7 @@ import (
 func fsckRemote(config Config) {
 	ri_path := path.Join(config.WorkingDir, config.Index + ".remote")
 	if !downloadRemoteIndex(config, ri_path) {
+		log.Fatalln("Can't download remote index")
 		return
 	}
 	ri := loadIndex(ri_path)
@@ -50,6 +50,5 @@ func fsckRemote(config Config) {
 	}
 
 	j, _ := json.MarshalIndent(ri, "", "  ")
-	fmt.Println(string(j))
 	uploadRemoteIndex(config, j)
 }

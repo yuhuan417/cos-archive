@@ -9,7 +9,7 @@ import (
 
 )
 
-func processSingleFile(path string, info os.FileInfo, config *Config, index FileInfoMap, err error) error {
+func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
 	log.Println("Processsing: ", path)
 	if err != nil {
 		log.Println("On error: ", err, " Skip: ", path)
@@ -52,7 +52,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 	for _, filePath := range config.FilePaths {
 		log.Println("Walk ", filePath)
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return processSingleFile(path, info, &config, localIndex.Files, err)
+			return processSingleFile(path, info, config, localIndex.Files, err)
 		})
 
 		if err != nil {
