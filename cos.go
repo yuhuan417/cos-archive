@@ -46,7 +46,7 @@ func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 		},
 	})
 
-	rp := path.Join(config.COS.Prefix, ctx.hash)
+	rp := path.Join(config.COS.ChunkPrefix, ctx.hash)
 	if !notCheckBeforeUpload {
 		_, err := c.Object.Head(context.Background(), rp, nil)
 		if err == nil {
@@ -145,7 +145,7 @@ func downloadRemoteIndex(config Config, path string) bool {
 		},
 	})
 
-	_, err := c.Object.GetToFile(context.Background(), "meta.json", path, nil)
+	_, err := c.Object.GetToFile(context.Background(), config.COS.Index, path, nil)
 	if err != nil {
 		log.Println("Download index error:", err)
 		return false
@@ -164,7 +164,7 @@ func uploadRemoteIndex(config Config, content []byte) {
 	})
 
 	rh := getRemoteMetaHash(config)
-	tmpfp := path.Join(config.WorkingDir, "meta.json.new")
+	tmpfp := path.Join(config.WorkingDir, config.COS.Index + ".new")
 	ioutil.WriteFile(tmpfp, content, 0666)
 	lh := metaHash(tmpfp)
 	if rh != lh {
@@ -178,12 +178,12 @@ func uploadRemoteIndex(config Config, content []byte) {
 			},
 		}
 		_, _, err := c.Object.Upload(
-			context.Background(), "meta.json", tmpfp, opt)
+			context.Background(), config.COS.Index, tmpfp, opt)
 		if err != nil {
 			log.Fatalln("Upload index fail:", err)
 		}
 	}
-	fp := path.Join(config.WorkingDir, "meta.json")
+	fp := path.Join(config.WorkingDir, config.COS.Index)
 	os.Rename(tmpfp, fp)
 }
 
@@ -196,7 +196,7 @@ func getRemoteMetaHash(config Config) string {
 			SecretKey: config.COS.Key,
 		},
 	})
-	resp, err := c.Object.Head(context.Background(), "meta.json", nil)
+	resp, err := c.Object.Head(context.Background(), config.COS.Index, nil)
 	if err != nil {
 		return ""
 	}
@@ -238,15 +238,15 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 	})
 
 	opt := &cos.BucketGetOptions{
-		Prefix:  config.COS.Prefix,
-		MaxKeys: 1000,
+		Prefix: config.COS.ChunkPrefix,
+		MaxKeys:     1000,
 	}
 	for {
 		v, _, err := c.Bucket.Get(context.Background(), opt)
 		if err != nil {
 			log.Fatalln("Scan error:", err)
 		}
-		prefix := filepath.Clean(config.COS.Prefix) + "/"
+		prefix := filepath.Clean(config.COS.ChunkPrefix) + "/"
 		for _, c := range v.Contents {
 			s := c.Key
 			cm[strings.TrimPrefix(s, prefix)] = false
@@ -255,9 +255,9 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 			break
 		}
 		opt = &cos.BucketGetOptions{
-			Prefix:  config.COS.Prefix,
-			MaxKeys: 1000,
-			Marker:  v.NextMarker,
+			Prefix: config.COS.ChunkPrefix,
+			MaxKeys:     1000,
+			Marker:      v.NextMarker,
 		}
 	}
 	return cm

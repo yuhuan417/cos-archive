@@ -19,7 +19,8 @@ type COSConfig struct {
 	URL    string
 	ID     string
 	Key    string
-	Prefix string
+	ChunkPrefix string
+	Index	string
 }
 
 func getConfig(configFileName string) (config Config) {
