@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"path"
 	"time"
 )
@@ -43,6 +44,7 @@ func fsckRemote(config Config) {
 	forever := time.Now().AddDate(10, 0, 0).Unix()
 	for k, v := range cm {
 		if !v {
+			log.Println("Lost found chunk", k)
 			ri.Chunks[k] = forever
 		}
 	}

@@ -45,10 +45,12 @@ func processSingleFile(path string, info os.FileInfo, config *Config, index File
 }
 
 func generateLocalIndex(config Config, remoteIndex Index) Index {
+	log.Println("Generating local index")
 	localIndex := Index{}
 	localIndex.Files = make(FileInfoMap)
 	localIndex.Chunks = make(ChunkDeleteMarkMap)
 	for _, filePath := range config.FilePaths {
+		log.Println("Walk ", filePath)
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
 			return processSingleFile(path, info, &config, localIndex.Files, err)
 		})
@@ -65,10 +67,12 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 		if remoteFileInfo, ok := remoteIndex.Files[fp]; ok {
 			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime && remoteFileInfo.Hash != "" {
 				h = remoteFileInfo.Hash
+				log.Println("Use cached hash ", h, " for ", fp)
 			}
 		}
 		if h == "" {
 			h = xunleiHash(fp, fi)
+			log.Println("Caculated hash ", h, " for ", fp)
 		}
 		fi.Hash = h
 	}
@@ -76,6 +80,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 }
 
 func getRemoteIndex(config Config) Index {
+	log.Println("Loading remote index")
 	old_ri_path := path.Join(config.WorkingDir, "meta.json")
 	mh := metaHash(old_ri_path)
 	rh := getRemoteMetaHash(config)
@@ -83,11 +88,13 @@ func getRemoteIndex(config Config) Index {
 	ri_path := ""
 	fromCOS := false
 	if mh == rh {
+		log.Println("Hash match, using local old index.")
 		ri_path = old_ri_path
 		fromCOS = true
 	} else {
 		ri_path = path.Join(config.WorkingDir, "meta.remote.json")
 		fromCOS = downloadRemoteIndex(config, ri_path)
+		log.Println("Download remote index: ", fromCOS)
 	}
 	ri := loadIndex(ri_path)
 	ri.fromCOS = fromCOS

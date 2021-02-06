@@ -135,6 +135,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 }
 
 func downloadRemoteIndex(config Config, path string) bool {
+	log.Println("Download remote index to ", path)
 	u, _ := url.Parse(config.COS.URL)
 	b := &cos.BaseURL{BucketURL: u}
 	c := cos.NewClient(b, &http.Client{
@@ -225,6 +226,7 @@ func deleteOutdatedChunks(config Config, index *Index) {
 }
 
 func scanRemoteChunksMap(config Config) ChunksMap {
+	log.Println("Scan remote chunks")
 	cm := make(ChunksMap)
 	u, _ := url.Parse(config.COS.URL)
 	b := &cos.BaseURL{BucketURL: u}
