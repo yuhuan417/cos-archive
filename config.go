@@ -24,7 +24,7 @@ type COSConfig struct {
 
 func getConfig(configFileName string) (config Config) {
 	// default value
-	config.Threads = 2
+	config.Threads = 4
 	config.Index = "meta.json"
 	config.COS.ChunkPrefix = "data/"
 
