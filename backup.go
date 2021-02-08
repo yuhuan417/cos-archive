@@ -10,7 +10,7 @@ import (
 )
 
 func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
-	log.Println("Processsing: ", path)
+	// log.Println("Processsing: ", path)
 	if err != nil {
 		log.Println("On error: ", err, " Skip: ", path)
 		return err
@@ -67,12 +67,12 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 		if remoteFileInfo, ok := remoteIndex.Files[fp]; ok {
 			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime && remoteFileInfo.Hash != "" {
 				h = remoteFileInfo.Hash
-				log.Println("Use cached hash ", h, " for ", fp)
+				// log.Println("Use cached hash ", h, " for ", fp)
 			}
 		}
 		if h == "" {
 			h = xunleiHash(fp, fi)
-			log.Println("Caculated hash ", h, " for ", fp)
+			// log.Println("Caculated hash ", h, " for ", fp)
 		}
 		fi.Hash = h
 	}

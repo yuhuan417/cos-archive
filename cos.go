@@ -36,7 +36,7 @@ func buildChunksMap(index Index) ChunksMap {
 }
 
 func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
-	log.Println("Uploading:", ctx)
+	// log.Println("Uploading:", ctx)
 	u, _ := url.Parse(config.COS.URL)
 	b := &cos.BaseURL{BucketURL: u}
 	c := cos.NewClient(b, &http.Client{
@@ -154,6 +154,7 @@ func downloadRemoteIndex(config Config, path string) bool {
 }
 
 func uploadRemoteIndex(config Config, content []byte) {
+	log.Println("Uploading index")
 	u, _ := url.Parse(config.COS.URL)
 	b := &cos.BaseURL{BucketURL: u}
 	c := cos.NewClient(b, &http.Client{
@@ -215,7 +216,7 @@ func deleteOutdatedChunks(config Config, index *Index) {
 	})
 	for fp, t := range index.Chunks {
 		if now > t {
-			log.Println("Deleting remote chunk: ", fp)
+			// log.Println("Deleting remote chunk: ", fp)
 			_, err := c.Object.Delete(context.Background(), fp)
 			if err != nil {
 				continue

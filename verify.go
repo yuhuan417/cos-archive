@@ -8,7 +8,7 @@ import (
 )
 
 func verifySingleFile(path string, info os.FileInfo, config Config, index Index, chunks ChunksMap, unmatchedFiles *[]string, err error) error {
-	log.Println("Verifying: ", path)
+	// log.Println("Verifying: ", path)
 	if err != nil {
 		log.Println("On error: ", err, " Skip: ", path)
 		return err
@@ -38,7 +38,7 @@ func verifySingleFile(path string, info os.FileInfo, config Config, index Index,
 	if info.Mode().IsRegular() {
 		f.Size = info.Size()
 		f.Hash = xunleiHash(path, &f)
-		log.Println("Calculate hash: ", path, f.Hash)
+		// log.Println("Calculate hash: ", path, f.Hash)
 		if _, ok := chunks[chunkHash(&f)]; !ok {
 			log.Println("Missing chunk: ", path, chunkHash(&f))
 			*unmatchedFiles = append(*unmatchedFiles, path)

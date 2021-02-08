@@ -3,10 +3,25 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"os/exec"
 	"path"
 
 	"github.com/allan-simon/go-singleinstance"
 )
+
+func runCMD(cmd string, check bool) {
+	c := exec.Command("bash", "-c" , cmd)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+
+	err:= c.Run()
+
+	if err != nil && check {
+		log.Println("runCMD failed: ", cmd)
+	}
+	return
+}
 
 func main() {
 	action := flag.String("action", "backup", "a string")
@@ -19,6 +34,11 @@ func main() {
 		log.Fatalln("An instance already exists")
 	}
 	defer lockFile.Close()
+
+	runCMD("umount /backup", false)
+	runCMD("lvremove -f /dev/vg1/backup", false)
+	runCMD("lvcreate -L 300G -s -n backup /dev/vg1/volume_1", true)
+	runCMD("mount /dev/vg1/backup /backup", true)
 
 	if *action == "backup" {
 		log.Println("Action: backup")
@@ -33,4 +53,6 @@ func main() {
 		log.Println("Action: restore")
 		restoreFiles(config)
 	}
+	runCMD("umount /backup", false)
+	runCMD("lvremove -f /dev/vg1/backup", false)
 }
