@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"log"
+	"path"
+
+	"github.com/allan-simon/go-singleinstance"
 )
 
 func main() {
@@ -11,6 +14,12 @@ func main() {
 	flag.Parse()
 
 	config := getConfig(*configPath)
+	lockFile, err := singleinstance.CreateLockFile(path.Join(config.WorkingDir, "pid.lock"))
+	if err != nil {
+		log.Fatalln("An instance already exists")
+	}
+	defer lockFile.Close()
+
 	if *action == "backup" {
 		log.Println("Action: backup")
 		backupFiles(config)
