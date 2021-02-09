@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tencentyun/cos-go-sdk-v5"
+	"go.uber.org/ratelimit"
 )
 
 // ChunksMap struct
@@ -264,4 +265,36 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 		}
 	}
 	return cm
+}
+
+func restoreChunk(config Config, cm ChunksMap) {
+	log.Println("Restoring chunks")
+	// Download chunk from map
+	rl := ratelimit.New(90) // per second, hardcode.
+
+	u, _ := url.Parse(config.COS.URL)
+	b := &cos.BaseURL{BucketURL: u}
+	c := cos.NewClient(b, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  config.COS.ID,
+			SecretKey: config.COS.Key,
+		},
+	})
+
+	for k := range cm {
+		rl.Take()
+		p := path.Join(config.COS.ChunkPrefix, k)
+		opt := &cos.ObjectRestoreOptions{
+			Days: 3,
+			Tier: &cos.CASJobParameters{
+				// Standard, Exepdited and Bulk
+				Tier: "Bulk",
+			},
+		}
+
+		_, err := c.Object.PostRestore(context.Background(), p, opt)
+		if err != nil {
+			log.Println("Restore file error:", p, err)
+		}
+	}
 }
