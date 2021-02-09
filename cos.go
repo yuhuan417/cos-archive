@@ -16,8 +16,10 @@ import (
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
+// ChunksMap struct
 type ChunksMap = map[string]bool
 
+// UploadCTX struct
 type UploadCTX struct {
 	path string
 	hash string
@@ -165,7 +167,7 @@ func uploadRemoteIndex(config Config, content []byte) {
 	})
 
 	rh := getRemoteMetaHash(config)
-	tmpfp := path.Join(config.WorkingDir, config.Index + ".new")
+	tmpfp := path.Join(config.WorkingDir, config.Index+".new")
 	ioutil.WriteFile(tmpfp, content, 0666)
 	lh := metaHash(tmpfp)
 	if rh != lh {
@@ -239,8 +241,8 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 	})
 
 	opt := &cos.BucketGetOptions{
-		Prefix: config.COS.ChunkPrefix,
-		MaxKeys:     1000,
+		Prefix:  config.COS.ChunkPrefix,
+		MaxKeys: 1000,
 	}
 	for {
 		v, _, err := c.Bucket.Get(context.Background(), opt)
@@ -256,9 +258,9 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 			break
 		}
 		opt = &cos.BucketGetOptions{
-			Prefix: config.COS.ChunkPrefix,
-			MaxKeys:     1000,
-			Marker:      v.NextMarker,
+			Prefix:  config.COS.ChunkPrefix,
+			MaxKeys: 1000,
+			Marker:  v.NextMarker,
 		}
 	}
 	return cm

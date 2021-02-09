@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-
 )
 
 func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
@@ -81,22 +80,22 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 
 func getRemoteIndex(config Config) Index {
 	log.Println("Loading remote index")
-	old_ri_path := path.Join(config.WorkingDir, config.Index)
-	mh := metaHash(old_ri_path)
+	oldPath := path.Join(config.WorkingDir, config.Index)
+	mh := metaHash(oldPath)
 	rh := getRemoteMetaHash(config)
 
-	ri_path := ""
+	riPath := ""
 	fromCOS := false
 	if mh == rh {
 		log.Println("Hash match, using local old index.")
-		ri_path = old_ri_path
+		riPath = oldPath
 		fromCOS = true
 	} else {
-		ri_path = path.Join(config.WorkingDir, config.Index + ".remote")
-		fromCOS = downloadRemoteIndex(config, ri_path)
+		riPath = path.Join(config.WorkingDir, config.Index+".remote")
+		fromCOS = downloadRemoteIndex(config, riPath)
 		log.Println("Download remote index: ", fromCOS)
 	}
-	ri := loadIndex(ri_path)
+	ri := loadIndex(riPath)
 	ri.fromCOS = fromCOS
 	return ri
 }

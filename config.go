@@ -6,19 +6,21 @@ import (
 	"os"
 )
 
+// Config struct
 type Config struct {
-	FilePaths []string
-	SkipList  []string
-	Threads   int
+	FilePaths  []string
+	SkipList   []string
+	Threads    int
 	WorkingDir string
-	Index	string
-	COS       COSConfig
+	Index      string
+	COS        COSConfig
 }
 
+// COSConfig struct
 type COSConfig struct {
-	URL    string
-	ID     string
-	Key    string
+	URL         string
+	ID          string
+	Key         string
 	ChunkPrefix string
 }
 

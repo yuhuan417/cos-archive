@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// FileInfo struct
 type FileInfo struct {
 	Size    int64
 	Mode    os.FileMode
@@ -14,10 +15,13 @@ type FileInfo struct {
 	Hash    string
 }
 
+// FileInfoMap struct
 type FileInfoMap = map[string]*FileInfo
 
+// ChunkDeleteMarkMap struct
 type ChunkDeleteMarkMap = map[string]int64
 
+// Index struct
 type Index struct {
 	Files   FileInfoMap
 	Chunks  ChunkDeleteMarkMap

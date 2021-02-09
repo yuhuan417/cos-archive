@@ -8,12 +8,12 @@ import (
 )
 
 func fsckRemote(config Config) {
-	ri_path := path.Join(config.WorkingDir, config.Index + ".remote")
-	if !downloadRemoteIndex(config, ri_path) {
+	riPath := path.Join(config.WorkingDir, config.Index+".remote")
+	if !downloadRemoteIndex(config, riPath) {
 		log.Fatalln("Can't download remote index")
 		return
 	}
-	ri := loadIndex(ri_path)
+	ri := loadIndex(riPath)
 
 	deleteOutdatedChunks(config, &ri)
 
@@ -32,7 +32,7 @@ func fsckRemote(config Config) {
 		}
 	}
 
-	for k, _ := range ri.Chunks {
+	for k := range ri.Chunks {
 		_, ok := cm[k]
 		if ok {
 			cm[k] = true
