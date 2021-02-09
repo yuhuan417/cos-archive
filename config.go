@@ -12,6 +12,7 @@ type Config struct {
 	SkipList   []string
 	Threads    int
 	WorkingDir string
+	TargetDir  string
 	Index      string
 	COS        COSConfig
 }

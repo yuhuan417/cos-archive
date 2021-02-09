@@ -298,3 +298,34 @@ func restoreChunk(config Config, cm ChunksMap) {
 		}
 	}
 }
+
+func downloadChunk(config Config, cm ChunksMap) {
+	log.Println("Downloading chunks")
+	// Download chunk from map
+
+	u, _ := url.Parse(config.COS.URL)
+	b := &cos.BaseURL{BucketURL: u}
+	c := cos.NewClient(b, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  config.COS.ID,
+			SecretKey: config.COS.Key,
+		},
+	})
+
+	for k := range cm {
+		cp := path.Join(config.TargetDir, "chunks")
+		err := os.MkdirAll(cp, 0755)
+		if err != nil {
+			log.Println("Can't create chunks directory: ", cp)
+		}
+		p := path.Join(config.COS.ChunkPrefix, k)
+		lp := path.Join(cp, k[len(k)-2:], k)
+		for {
+			log.Println("Downloading:", p)
+			_, err = c.Object.GetToFile(context.Background(), p, lp, nil)
+			if err != nil {
+				log.Println("Download file error:", p, err)
+			}
+		}
+	}
+}

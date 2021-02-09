@@ -11,11 +11,11 @@ import (
 )
 
 func runCMD(cmd string, check bool) {
-	c := exec.Command("bash", "-c" , cmd)
+	c := exec.Command("bash", "-c", cmd)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
-	err:= c.Run()
+	err := c.Run()
 
 	if err != nil && check {
 		log.Println("runCMD failed: ", cmd)
@@ -35,24 +35,29 @@ func main() {
 	}
 	defer lockFile.Close()
 
-	runCMD("umount /backup", false)
-	runCMD("lvremove -f /dev/vg1/backup", false)
-	runCMD("lvcreate -L 300G -s -n backup /dev/vg1/volume_1", true)
-	runCMD("mount /dev/vg1/backup /backup", true)
-
-	if *action == "backup" {
-		log.Println("Action: backup")
-		backupFiles(config)
-	} else if *action == "fsck" {
-		log.Println("Action: fsck")
-		fsckRemote(config)
-	} else if *action == "verify" {
-		log.Println("Action: verify")
-		verifyFiles(config)
-	} else if *action == "restore" {
+	if *action == "restore" {
 		log.Println("Action: restore")
 		restoreFiles(config)
+	} else if *action == "download" {
+		log.Println("Action: download")
+		downloadFiles(config)
+	} else {
+		runCMD("umount /backup", false)
+		runCMD("lvremove -f /dev/vg1/backup", false)
+		runCMD("lvcreate -L 300G -s -n backup /dev/vg1/volume_1", true)
+		runCMD("mount /dev/vg1/backup /backup", true)
+
+		if *action == "backup" {
+			log.Println("Action: backup")
+			backupFiles(config)
+		} else if *action == "fsck" {
+			log.Println("Action: fsck")
+			fsckRemote(config)
+		} else if *action == "verify" {
+			log.Println("Action: verify")
+			verifyFiles(config)
+		}
+		runCMD("umount /backup", false)
+		runCMD("lvremove -f /dev/vg1/backup", false)
 	}
-	runCMD("umount /backup", false)
-	runCMD("lvremove -f /dev/vg1/backup", false)
 }
