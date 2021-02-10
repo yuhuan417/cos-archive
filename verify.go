@@ -15,8 +15,8 @@ func verifySingleFile(path string, info os.FileInfo, config Config, index Index,
 	}
 	if info.IsDir() {
 		for _, skip := range config.SkipList {
-			log.Println("In skiplist: ", skip, " Skip: ", path)
 			if info.Name() == skip {
+				log.Println("In skiplist: ", skip, " Skip: ", path)
 				return filepath.SkipDir
 			}
 		}
