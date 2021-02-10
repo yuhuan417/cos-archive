@@ -61,7 +61,7 @@ func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 		ThreadPoolSize: 2,
 		OptIni: &cos.InitiateMultipartUploadOptions{
 			ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{
-				XCosStorageClass: "ARCHIVE",
+				XCosStorageClass: "DEEP_ARCHIVE",
 			},
 		},
 	}
