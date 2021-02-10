@@ -70,7 +70,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 			}
 		}
 		if h == "" {
-			h = xunleiHash(fp, fi)
+			h = xunleiHash(fp, fi.Size)
 			// log.Println("Caculated hash ", h, " for ", fp)
 		}
 		fi.Hash = h

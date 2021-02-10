@@ -16,9 +16,8 @@ func metaHash(path string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func xunleiHash(path string, info *FileInfo) string {
+func xunleiHash(path string, size int64) string {
 	h := sha1.New()
-	size := info.Size
 	f, _ := os.Open(path)
 	defer f.Close()
 	if size < 0xF000 {
@@ -33,6 +32,6 @@ func xunleiHash(path string, info *FileInfo) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func chunkHash(fi *FileInfo) string {
-	return strconv.FormatInt(fi.Size, 10) + "-" + fi.Hash
+func chunkHash(size int64, hash string) string {
+	return strconv.FormatInt(size, 10) + "-" + hash
 }

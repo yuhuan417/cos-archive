@@ -33,7 +33,7 @@ func buildChunksMap(index Index) ChunksMap {
 			continue
 		}
 
-		chunksMap[chunkHash(fi)] = false
+		chunksMap[chunkHash(fi.Size, fi.Hash)] = false
 	}
 	return chunksMap
 }
@@ -104,7 +104,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			continue
 		}
 
-		h := chunkHash(fi)
+		h := chunkHash(fi.Size, fi.Hash)
 		// 检查相同的chunk是否已经处理过
 		lc, _ := localChunkMap[h]
 		if lc {
@@ -326,7 +326,13 @@ func downloadChunk(config Config, cm ChunksMap) {
 		lp := path.Join(cp, k[len(k)-2:], k)
 		for {
 			log.Println("Downloading:", p)
-			// FIXME: skip if exists and hash matches.
+			if fi, err := os.Stat(lp); err == nil {
+				h := xunleiHash(lp, fi.Size())
+				if chunkHash(fi.Size(), h) == k {
+					log.Println("File exists. Hash matches. Good, skip.")
+					continue
+				}
+			}
 			_, err = c.Object.GetToFile(context.Background(), p, lp, nil)
 			if err != nil {
 				log.Println("Download file error:", p, err)

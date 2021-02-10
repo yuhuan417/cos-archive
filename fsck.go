@@ -23,7 +23,7 @@ func fsckRemote(config Config) {
 		if fi.IsDir || fi.LinkTo != "" {
 			continue
 		}
-		ch := chunkHash(fi)
+		ch := chunkHash(fi.Size, fi.Hash)
 		_, ok := cm[ch]
 		if ok {
 			cm[ch] = true
