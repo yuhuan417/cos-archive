@@ -87,6 +87,8 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	wg := &sync.WaitGroup{}
 	ch := make(chan UploadCTX, config.Threads)
 
+	cnt := 0
+
 	uploadFile := func(id int) {
 		defer wg.Done()
 		for ctx := range ch {
@@ -118,6 +120,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			ctx := new(UploadCTX)
 			ctx.path = fp
 			ctx.hash = h
+			cnt = cnt + 1
 			ch <- *ctx
 		}
 		_, ok = remoteIndex.Chunks[h]
@@ -129,6 +132,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	close(ch)
 	wg.Wait()
 
+	log.Println("Uploaded ", cnt, " files.")
 	for k, v := range remoteChunkMap {
 		if !v {
 			log.Println("Marking delete chunk:", k)
@@ -322,6 +326,7 @@ func downloadChunk(config Config, cm ChunksMap) {
 		lp := path.Join(cp, k[len(k)-2:], k)
 		for {
 			log.Println("Downloading:", p)
+			// FIXME: skip if exists and hash matches.
 			_, err = c.Object.GetToFile(context.Background(), p, lp, nil)
 			if err != nil {
 				log.Println("Download file error:", p, err)
