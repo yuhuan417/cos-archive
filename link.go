@@ -53,6 +53,12 @@ func linkFiles(config Config) {
 			}
 			continue
 		}
+	}
+	for fp, fi := range ri.Files {
+		if fi.IsDir || fi.LinkTo != "" {
+			continue
+		}
+		targetPath := path.Join(linkPath, fp)
 		k := chunkHash(fi.Size, fi.Hash)
 		lp := path.Join(chunkPath, k[len(k)-2:], k)
 		err := os.Link(lp, targetPath)
