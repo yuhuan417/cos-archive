@@ -14,6 +14,7 @@ type Config struct {
 	WorkingDir string
 	TargetDir  string
 	Index      string
+	Port       string
 	COS        COSConfig
 }
 
