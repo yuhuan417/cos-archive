@@ -25,7 +25,7 @@ func hardlinkCount(fp string) uint64 {
 
 func linkFiles(config Config) {
 	if config.TargetDir == "" {
-		log.Fatalln("Empty target dir.")
+		log.Fatalln("Empty target dir!")
 	}
 	// index path
 	riPath := path.Join(config.TargetDir, config.Index+".remote")
