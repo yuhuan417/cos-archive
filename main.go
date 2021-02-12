@@ -41,6 +41,9 @@ func main() {
 	} else if *action == "download" {
 		log.Println("Action: download")
 		downloadFiles(config)
+	} else if *action == "link" {
+		log.Println("Action: link")
+		linkFiles(config)
 	} else {
 		runCMD("umount /backup", false)
 		runCMD("lvremove -f /dev/vg1/backup", false)
