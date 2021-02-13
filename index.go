@@ -23,9 +23,8 @@ type ChunkDeleteMarkMap = map[string]int64
 
 // Index struct
 type Index struct {
-	Files   FileInfoMap
-	Chunks  ChunkDeleteMarkMap
-	fromCOS bool // true: 云端 false: 云端加载失败，此时需要在上传时检测chunk是否已经存在，避免重复上传浪费
+	Files  FileInfoMap
+	Chunks ChunkDeleteMarkMap
 }
 
 func loadIndex(path string) Index {

@@ -83,20 +83,17 @@ func getRemoteIndex(config Config) Index {
 	oldPath := path.Join(config.WorkingDir, config.Index)
 	mh := metaHash(oldPath)
 	rh := getRemoteMetaHash(config)
-
 	riPath := ""
-	fromCOS := false
+
 	if mh == rh {
 		log.Println("Hash match, using local old index.")
 		riPath = oldPath
-		fromCOS = true
 	} else {
 		riPath = path.Join(config.WorkingDir, config.Index+".remote")
-		fromCOS = downloadRemoteIndex(config, riPath)
-		log.Println("Download remote index: ", fromCOS)
+		downloadRemoteIndex(config, riPath)
+		log.Println("Download remote index to: ", riPath)
 	}
 	ri := loadIndex(riPath)
-	ri.fromCOS = fromCOS
 	return ri
 }
 
