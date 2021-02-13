@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"go.uber.org/ratelimit"
 )
@@ -88,6 +89,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	ch := make(chan UploadCTX, config.Threads)
 
 	cnt := 0
+	cntSize := int64(0)
 
 	uploadFile := func(id int) {
 		defer wg.Done()
@@ -121,6 +123,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			ctx.path = fp
 			ctx.hash = h
 			cnt = cnt + 1
+			cntSize = cntSize + fi.Size
 			ch <- *ctx
 		}
 		_, ok = remoteIndex.Chunks[h]
@@ -132,7 +135,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	close(ch)
 	wg.Wait()
 
-	log.Println("Uploaded ", cnt, " files.")
+	log.Println("Uploaded ", cnt, " files, ", humanize.Bytes(uint64(cntSize)))
 	for k, v := range remoteChunkMap {
 		if !v {
 			log.Println("Marking delete chunk:", k)
