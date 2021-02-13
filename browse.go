@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -47,6 +48,7 @@ func handleDir(m FileInfoMap, p string, w http.ResponseWriter, r *http.Request) 
 		bn := k
 		if m[k].IsDir {
 			bn = bn + "/"
+			alink = alink + "/"
 		}
 		fmt.Fprintf(w, `
       <tr>
@@ -65,22 +67,32 @@ func handleDir(m FileInfoMap, p string, w http.ResponseWriter, r *http.Request) 
 }
 
 func handleFile(config Config, fi *FileInfo, p string, w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/html")
 	w.Header().Set("X-Content-Type-Options", "no-sniff")
+	fmt.Fprintf(w, `
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>File %s</title>
+</head>
+<body>`, p)
+
 	if fi.LinkTo != "" {
 		fmt.Fprintf(w, "%s links to %s", p, fi.LinkTo)
 		return
 	}
 	u, _ := url.Parse(config.COS.URL)
-	u.Path = path.Join(u.Path, config.COS.ChunkPrefix, p)
+	u.Path = path.Join(u.Path, config.COS.ChunkPrefix, chunkHash(fi.Size, fi.Hash))
 	s := u.String()
 	fmt.Fprintf(w, "%s on cloud: %s", p, s)
+	fmt.Fprintf(w, "</body></html>")
 }
 
 func browseHandler(config Config, fm FileInfoMap, dm DirMap) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, _ := url.PathUnescape(r.URL.Path)
-		fmt.Println("path:", p)
+		p = strings.TrimSuffix(p, "/")
 		if p == "" {
 			p = "/"
 		}
@@ -90,6 +102,7 @@ func browseHandler(config Config, fm FileInfoMap, dm DirMap) http.Handler {
 			handleDir(m, p, w, r)
 			return
 		}
+
 		if fi, ok := fm[p]; ok {
 			handleFile(config, fi, p, w, r)
 			return
@@ -107,14 +120,14 @@ func browseFiles(config Config) {
 		dp := path.Dir(fp)
 		bn := path.Base(fp)
 		if _, ok := index.Files[dp]; !ok {
-			dp = ""
+			dp = "/"
 			bn = fp
 		}
-		k := dp + "/"
-		if _, ok := dm[k]; !ok {
-			dm[k] = make(FileInfoMap)
+
+		if _, ok := dm[dp]; !ok {
+			dm[dp] = make(FileInfoMap)
 		}
-		dm[k][bn] = fi
+		dm[dp][bn] = fi
 	}
 
 	http.Handle("/", browseHandler(config, index.Files, dm))
