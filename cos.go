@@ -89,7 +89,8 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	ch := make(chan UploadCTX, config.Threads)
 
 	cnt := 0
-	cntSize := int64(0)
+	uploadSize := int64(0)
+	totalSize := int64(0)
 
 	uploadFile := func(id int) {
 		defer wg.Done()
@@ -113,6 +114,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			continue
 		}
 
+		totalSize = totalSize + fi.Size
 		localChunkMap[h] = true
 		_, ok := remoteChunkMap[h]
 		if ok {
@@ -123,7 +125,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			ctx.path = fp
 			ctx.hash = h
 			cnt = cnt + 1
-			cntSize = cntSize + fi.Size
+			uploadSize = uploadSize + fi.Size
 			ch <- *ctx
 		}
 		_, ok = remoteIndex.Chunks[h]
@@ -135,7 +137,8 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	close(ch)
 	wg.Wait()
 
-	log.Println("Uploaded ", cnt, " files, ", humanize.Bytes(uint64(cntSize)))
+	log.Println("Uploaded ", cnt, " files, ", humanize.IBytes(uint64(uploadSize)))
+	log.Println("Total chunk size: ", humanize.IBytes(uint64(totalSize)))
 	for k, v := range remoteChunkMap {
 		if !v {
 			log.Println("Marking delete chunk:", k)
