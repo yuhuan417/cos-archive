@@ -30,6 +30,12 @@ func main() {
 
 	config := getConfig(*configPath)
 
+	if *action == "browse" {
+		log.Println("Action browse")
+		browseFiles(config)
+		return
+	}
+
 	lockFile, err := singleinstance.CreateLockFile(path.Join(config.WorkingDir, "pid.lock"))
 	if err != nil {
 		log.Fatalln("An instance already exists")
