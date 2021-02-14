@@ -37,10 +37,10 @@ func verifySingleFile(path string, info os.FileInfo, config Config, index Index,
 	}
 	if info.Mode().IsRegular() {
 		f.Size = info.Size()
-		f.Hash = xunleiHash(path, f.Size)
+		f.Hash = chunkHash(path, f.Size)
 		// log.Println("Calculate hash: ", path, f.Hash)
-		if _, ok := chunks[chunkHash(f.Size, f.Hash)]; !ok {
-			log.Println("Missing chunk: ", path, chunkHash(f.Size, f.Hash))
+		if _, ok := chunks[chunkPath(f.Size, f.Hash)]; !ok {
+			log.Println("Missing chunk: ", path, chunkPath(f.Size, f.Hash))
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		}
 	}

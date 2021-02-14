@@ -1,8 +1,13 @@
 package main
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"io"
 	"log"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -32,7 +37,7 @@ func buildChunksMap(index Index) ChunksMap {
 			continue
 		}
 
-		chunksMap[chunkHash(fi.Size, fi.Hash)] = false
+		chunksMap[chunkPath(fi.Size, fi.Hash)] = false
 	}
 	return chunksMap
 }
@@ -46,4 +51,25 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 		cm[strings.TrimPrefix(key, p)] = false
 	})
 	return cm
+}
+
+func chunkPath(size int64, hash string) string {
+	return strconv.FormatInt(size, 10) + "-" + hash
+}
+
+func chunkHash(path string, size int64) string {
+	// xunlei hash
+	h := sha1.New()
+	f, _ := os.Open(path)
+	defer f.Close()
+	if size < 0xF000 {
+		io.Copy(h, f)
+	} else {
+		io.CopyN(h, f, 0x5000)
+		f.Seek(size/3, 0)
+		io.CopyN(h, f, 0x5000)
+		f.Seek(size-0x5000, 0)
+		io.CopyN(h, f, 0x5000)
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

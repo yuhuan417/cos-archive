@@ -83,7 +83,7 @@ func handleFile(config Config, fi *FileInfo, p string, w http.ResponseWriter, r 
 		return
 	}
 	u, _ := url.Parse(config.COS.URL)
-	u.Path = path.Join(u.Path, config.COS.ChunkPrefix, chunkHash(fi.Size, fi.Hash))
+	u.Path = path.Join(u.Path, config.COS.ChunkPrefix, chunkPath(fi.Size, fi.Hash))
 	s := u.String()
 	fmt.Fprintf(w, "%s on cloud: %s", p, s)
 	fmt.Fprintf(w, "</body></html>")

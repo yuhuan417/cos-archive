@@ -74,7 +74,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 			}
 		}
 		if h == "" {
-			h = xunleiHash(fp, fi.Size)
+			h = chunkHash(fp, fi.Size)
 			// log.Println("Caculated hash ", h, " for ", fp)
 		}
 		fi.Hash = h
@@ -82,24 +82,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 	return localIndex
 }
 
-func getRemoteIndex(config Config) Index {
-	log.Println("Loading remote index")
-	oldPath := path.Join(config.WorkingDir, config.Index)
-	mh := metaHash(oldPath)
-	rh := getRemoteMetaHash(config)
-	riPath := ""
 
-	if mh == rh {
-		log.Println("Hash match, using local old index.")
-		riPath = oldPath
-	} else {
-		riPath = path.Join(config.WorkingDir, config.Index+".remote")
-		downloadRemoteIndex(config, riPath)
-		log.Println("Download remote index to: ", riPath)
-	}
-	ri := loadIndex(riPath)
-	return ri
-}
 
 func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 	rp := path.Join(config.COS.ChunkPrefix, ctx.hash)
@@ -150,7 +133,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			continue
 		}
 
-		h := chunkHash(fi.Size, fi.Hash)
+		h := chunkPath(fi.Size, fi.Hash)
 		// 检查相同的chunk是否已经处理过
 		lc, _ := localChunkMap[h]
 		if lc {

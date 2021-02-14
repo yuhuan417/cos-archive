@@ -32,7 +32,7 @@ func linkFiles(config Config) {
 	ri := loadIndex(riPath)
 
 	// chunk path
-	chunkPath := path.Join(config.TargetDir, "chunks")
+	chunksPath := path.Join(config.TargetDir, "chunks")
 
 	// linking path
 	linkPath := path.Join(config.TargetDir, "restore")
@@ -59,8 +59,8 @@ func linkFiles(config Config) {
 			continue
 		}
 		targetPath := path.Join(linkPath, fp)
-		k := chunkHash(fi.Size, fi.Hash)
-		lp := path.Join(chunkPath, k[len(k)-2:], k)
+		k := chunkPath(fi.Size, fi.Hash)
+		lp := path.Join(chunksPath, k[len(k)-2:], k)
 		err := os.Link(lp, targetPath)
 		if err != nil {
 			log.Fatal("Link error:", targetPath, lp, err)

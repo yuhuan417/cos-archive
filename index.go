@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -29,6 +32,14 @@ type ChunkDeleteMarkMap = map[string]int64
 type Index struct {
 	Files  FileInfoMap
 	Chunks ChunkDeleteMarkMap
+}
+
+func metaHash(path string) string {
+	h := sha1.New()
+	f, _ := os.Open(path)
+	defer f.Close()
+	io.Copy(h, f)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func loadIndex(path string) Index {
@@ -85,4 +96,23 @@ func uploadRemoteIndex(config Config, content []byte) {
 	}
 	fp := path.Join(config.WorkingDir, config.Index)
 	os.Rename(tmpfp, fp)
+}
+
+func getRemoteIndex(config Config) Index {
+	log.Println("Loading remote index")
+	oldPath := path.Join(config.WorkingDir, config.Index)
+	mh := metaHash(oldPath)
+	rh := getRemoteMetaHash(config)
+	riPath := ""
+
+	if mh == rh {
+		log.Println("Hash match, using local old index.")
+		riPath = oldPath
+	} else {
+		riPath = path.Join(config.WorkingDir, config.Index+".remote")
+		downloadRemoteIndex(config, riPath)
+		log.Println("Download remote index to: ", riPath)
+	}
+	ri := loadIndex(riPath)
+	return ri
 }

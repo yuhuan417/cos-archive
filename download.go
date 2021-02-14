@@ -21,8 +21,8 @@ func downloadChunk(config Config, cm ChunksMap) {
 		for {
 			log.Println("Downloading:", p)
 			if fi, err := os.Stat(lp); err == nil {
-				h := xunleiHash(lp, fi.Size())
-				if chunkHash(fi.Size(), h) == k {
+				h := chunkHash(lp, fi.Size())
+				if chunkPath(fi.Size(), h) == k {
 					log.Println("File exists. Hash matches. Good, skip.")
 					continue
 				}
