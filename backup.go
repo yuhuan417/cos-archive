@@ -88,8 +88,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 	return localIndex
 }
 
-func uploadPayload(config Config, ctx UploadCTX) {
-	c := NewCOS(config.COS)
+func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 	rp := path.Join(config.COS.ChunkPrefix, ctx.hash)
 
 	header := c.GetHeader(rp)
@@ -123,10 +122,12 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	uploadSize := int64(0)
 	totalSize := int64(0)
 
+	c := NewCOS(config.COS)
+
 	uploadFile := func(id int) {
 		defer wg.Done()
 		for ctx := range ch {
-			uploadPayload(config, ctx)
+			uploadPayload(c, config, ctx)
 		}
 	}
 	wg.Add(config.Threads)

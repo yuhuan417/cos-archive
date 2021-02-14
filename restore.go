@@ -34,11 +34,11 @@ func restoreChunk(config Config, cm ChunksMap) {
 	log.Println("Restoring chunks")
 	// Download chunk from map
 	rl := ratelimit.New(90) // per second, hardcode.
+	c := NewCOS(config.COS)
 
 	for k := range cm {
 		rl.Take()
 		p := path.Join(config.COS.ChunkPrefix, k)
-		c := NewCOS(config.COS)
 		err := c.RestoreFile(p)
 		logRestoreStatus(err)
 	}
