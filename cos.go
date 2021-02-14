@@ -40,6 +40,7 @@ func (c *COS) DownloadFile(remote string, local string) error {
 }
 
 // UploadFile to cos
+// Server error: ServiceUnavailable, retry
 func (c *COS) UploadFile(key string, file string, class string, header http.Header) error {
 	opt := &cos.MultiUploadOptions{
 		ThreadPoolSize: 2,
@@ -50,8 +51,19 @@ func (c *COS) UploadFile(key string, file string, class string, header http.Head
 			},
 		},
 	}
-	_, _, err := c.c.Object.Upload(
-		context.Background(), key, file, opt)
+	var err error
+	for i := 0; i <= c.config.Retries; i++ {
+		_, _, err = c.c.Object.Upload(
+			context.Background(), key, file, opt)
+		if err == nil {
+			return nil
+		}
+		if e, ok := cos.IsCOSError(err); ok {
+			if e.Code != "ServiceUnavailable" {
+				return err
+			}
+		}
+	}
 	return err
 }
 
