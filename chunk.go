@@ -17,11 +17,11 @@ type ChunksMap = map[string]bool
 
 func deleteOutdatedChunks(config Config, index *Index) {
 	now := time.Now().Unix()
-
+	c := NewCOS(config.COS)
 	for fp, t := range index.Chunks {
 		if now > t {
 			// log.Println("Deleting remote chunk: ", fp)
-			err := cosDeleteFile(config.COS, fp)
+			err := c.DeleteFile(fp)
 			if err != nil {
 				continue
 			}
@@ -45,8 +45,8 @@ func buildChunksMap(index Index) ChunksMap {
 func scanRemoteChunksMap(config Config) ChunksMap {
 	log.Println("Scan remote chunks")
 	cm := make(ChunksMap)
-
-	cosScanFiles(config.COS, config.COS.ChunkPrefix, func(key string) {
+	c := NewCOS(config.COS)
+	c.ScanFiles(func(key string) {
 		p := filepath.Clean(config.COS.ChunkPrefix) + "/"
 		cm[strings.TrimPrefix(key, p)] = false
 	})

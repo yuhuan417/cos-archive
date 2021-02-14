@@ -61,8 +61,9 @@ func loadIndex(path string) Index {
 }
 
 func downloadRemoteIndex(config Config, path string) bool {
+	c := NewCOS(config.COS)
 	log.Println("Download remote index to ", path)
-	err := cosDownloadFile(config.COS, config.Index, path)
+	err := c.DownloadFile(config.Index, path)
 	if err != nil {
 		log.Println("Download index error:", err)
 		return false
@@ -71,7 +72,8 @@ func downloadRemoteIndex(config Config, path string) bool {
 }
 
 func getRemoteMetaHash(config Config) string {
-	h := cosGetHeader(config.COS, config.Index)
+	c := NewCOS(config.COS)
+	h := c.GetHeader(config.Index)
 
 	if h == nil {
 		return ""
@@ -89,7 +91,8 @@ func uploadRemoteIndex(config Config, content []byte) {
 	if rh != lh {
 		hh := http.Header{}
 		hh.Add("x-cos-meta-hash", lh)
-		err := cosUploadFile(config.COS, config.Index, tmpfp, "STANDARD", hh)
+		c := NewCOS(config.COS)
+		err := c.UploadFile(config.Index, tmpfp, "STANDARD", hh)
 		if err != nil {
 			log.Fatalln("Upload index fail:", err)
 		}

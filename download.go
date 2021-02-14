@@ -9,7 +9,7 @@ import (
 func downloadChunk(config Config, cm ChunksMap) {
 	log.Println("Downloading chunks")
 	// Download chunk from map
-
+	c := NewCOS(config.COS)
 	for k := range cm {
 		cp := path.Join(config.TargetDir, "chunks", k[len(k)-2:])
 		err := os.MkdirAll(cp, 0755)
@@ -27,7 +27,7 @@ func downloadChunk(config Config, cm ChunksMap) {
 					break
 				}
 			}
-			err = cosDownloadFile(config.COS, p, lp)
+			err = c.DownloadFile(p, lp)
 			if err != nil {
 				log.Println("Download file error:", p, err)
 			} else {

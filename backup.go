@@ -88,16 +88,17 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 	return localIndex
 }
 
-func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
+func uploadPayload(config Config, ctx UploadCTX) {
+	c := NewCOS(config.COS)
 	rp := path.Join(config.COS.ChunkPrefix, ctx.hash)
-	if !notCheckBeforeUpload {
-		header := cosGetHeader(config.COS, rp)
-		if header != nil {
-			log.Println("File already exists:", ctx, rp)
-			return
-		}
+
+	header := c.GetHeader(rp)
+	if header != nil {
+		log.Println("File already exists:", ctx, rp)
+		return
 	}
-	err := cosUploadFile(config.COS, rp, ctx.path, config.COS.Class, nil)
+
+	err := c.UploadFile(rp, ctx.path, config.COS.Class, nil)
 	if err != nil {
 		log.Fatalln("Upload file error:", ctx, err)
 	}
@@ -125,7 +126,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	uploadFile := func(id int) {
 		defer wg.Done()
 		for ctx := range ch {
-			uploadPayload(config, false, ctx)
+			uploadPayload(config, ctx)
 		}
 	}
 	wg.Add(config.Threads)

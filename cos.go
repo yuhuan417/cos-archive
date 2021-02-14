@@ -9,30 +9,38 @@ import (
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
-func cosInit(config COSConfig) *cos.Client {
+// COS struct
+type COS struct {
+	c      *cos.Client
+	config COSConfig
+}
+
+// NewCOS new COS
+func NewCOS(config COSConfig) *COS {
+	var c = new(COS)
 	u, _ := url.Parse(config.URL)
 	b := &cos.BaseURL{BucketURL: u}
-	return cos.NewClient(b, &http.Client{
+	c.c = cos.NewClient(b, &http.Client{
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  config.ID,
 			SecretKey: config.Key,
 		},
 	})
+	c.config = config
+	return c
 }
 
-func cosDownloadFile(config COSConfig, remote string, local string) error {
-	c := cosInit(config)
-
-	_, err := c.Object.GetToFile(context.Background(), remote, local, nil)
+// DownloadFile from remote to local
+func (c *COS) DownloadFile(remote string, local string) error {
+	_, err := c.c.Object.GetToFile(context.Background(), remote, local, nil)
 	if err != nil {
 		log.Println("Download file error:", remote, local)
 	}
 	return err
 }
 
-func cosUploadFile(config COSConfig, key string, file string, class string, header http.Header) error {
-	c := cosInit(config)
-
+// UploadFile to cos
+func (c *COS) UploadFile(key string, file string, class string, header http.Header) error {
 	opt := &cos.MultiUploadOptions{
 		ThreadPoolSize: 2,
 		OptIni: &cos.InitiateMultipartUploadOptions{
@@ -42,35 +50,34 @@ func cosUploadFile(config COSConfig, key string, file string, class string, head
 			},
 		},
 	}
-	_, _, err := c.Object.Upload(
+	_, _, err := c.c.Object.Upload(
 		context.Background(), key, file, opt)
 	return err
 }
 
-func cosGetHeader(config COSConfig, file string) http.Header {
-	c := cosInit(config)
-	resp, err := c.Object.Head(context.Background(), file, nil)
+// GetHeader from cos
+func (c *COS) GetHeader(file string) http.Header {
+	resp, err := c.c.Object.Head(context.Background(), file, nil)
 	if err != nil {
 		return nil
 	}
 	return resp.Header
 }
 
-func cosDeleteFile(config COSConfig, file string) error {
-	c := cosInit(config)
-	_, err := c.Object.Delete(context.Background(), file)
+// DeleteFile from cos
+func (c *COS) DeleteFile(file string) error {
+	_, err := c.c.Object.Delete(context.Background(), file)
 	return err
 }
 
-func cosScanFiles(config COSConfig, prefix string, cb func(key string)) {
-	c := cosInit(config)
-
+// ScanFiles from cos
+func (c *COS) ScanFiles(cb func(key string)) {
 	opt := &cos.BucketGetOptions{
-		Prefix:  prefix,
+		Prefix:  c.config.ChunkPrefix,
 		MaxKeys: 1000,
 	}
 	for {
-		v, _, err := c.Bucket.Get(context.Background(), opt)
+		v, _, err := c.c.Bucket.Get(context.Background(), opt)
 		if err != nil {
 			log.Fatalln("Scan error:", err)
 		}
@@ -82,7 +89,7 @@ func cosScanFiles(config COSConfig, prefix string, cb func(key string)) {
 			break
 		}
 		opt = &cos.BucketGetOptions{
-			Prefix:  config.ChunkPrefix,
+			Prefix:  c.config.ChunkPrefix,
 			MaxKeys: 1000,
 			Marker:  v.NextMarker,
 		}
@@ -90,8 +97,8 @@ func cosScanFiles(config COSConfig, prefix string, cb func(key string)) {
 	return
 }
 
-func cosRestoreFile(config COSConfig, file string) error {
-	c := cosInit(config)
+// RestoreFile from COS
+func (c *COS) RestoreFile(file string) error {
 	opt := &cos.ObjectRestoreOptions{
 		Days: 3,
 		Tier: &cos.CASJobParameters{
@@ -99,6 +106,6 @@ func cosRestoreFile(config COSConfig, file string) error {
 			Tier: "Bulk",
 		},
 	}
-	_, err := c.Object.PostRestore(context.Background(), file, opt)
+	_, err := c.c.Object.PostRestore(context.Background(), file, opt)
 	return err
 }
