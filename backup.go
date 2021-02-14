@@ -12,7 +12,7 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
+func indexSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
 	// log.Println("Processsing: ", path)
 	if err != nil {
 		log.Println("On error: ", err, " Skip: ", path)
@@ -55,7 +55,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 	for _, filePath := range config.FilePaths {
 		log.Println("Walk ", filePath)
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return processSingleFile(path, info, config, localIndex.Files, err)
+			return indexSingleFile(path, info, config, localIndex.Files, err)
 		})
 
 		if err != nil {
@@ -99,6 +99,21 @@ func getRemoteIndex(config Config) Index {
 	}
 	ri := loadIndex(riPath)
 	return ri
+}
+
+func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
+	rp := path.Join(config.COS.ChunkPrefix, ctx.hash)
+	if !notCheckBeforeUpload {
+		err := cosGetHeader(config.COS, rp)
+		if err == nil {
+			log.Println("File already exists:", ctx)
+			return
+		}
+	}
+	err := cosUploadFile(config.COS, rp, ctx.path, "DEEP_ARCHIVE", nil)
+	if err != nil {
+		log.Fatalln("Upload file error:", ctx, err)
+	}
 }
 
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
