@@ -9,10 +9,15 @@ import (
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
-// UploadCTX struct
-type UploadCTX struct {
-	path string
-	hash string
+func cosInit(config COSConfig) *cos.Client {
+	u, _ := url.Parse(config.URL)
+	b := &cos.BaseURL{BucketURL: u}
+	return cos.NewClient(b, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  config.ID,
+			SecretKey: config.Key,
+		},
+	})
 }
 
 func cosDownloadFile(config COSConfig, remote string, local string) error {
@@ -96,15 +101,4 @@ func cosRestoreFile(config COSConfig, file string) error {
 	}
 	_, err := c.Object.PostRestore(context.Background(), file, opt)
 	return err
-}
-
-func cosInit(config COSConfig) *cos.Client {
-	u, _ := url.Parse(config.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	return cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.ID,
-			SecretKey: config.Key,
-		},
-	})
 }

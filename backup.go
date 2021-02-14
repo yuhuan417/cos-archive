@@ -12,6 +12,12 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
+// UploadCTX struct
+type UploadCTX struct {
+	path string
+	hash string
+}
+
 func indexSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
 	// log.Println("Processsing: ", path)
 	if err != nil {
@@ -82,14 +88,12 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 	return localIndex
 }
 
-
-
 func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 	rp := path.Join(config.COS.ChunkPrefix, ctx.hash)
 	if !notCheckBeforeUpload {
-		err := cosGetHeader(config.COS, rp)
-		if err == nil {
-			log.Println("File already exists:", ctx)
+		header := cosGetHeader(config.COS, rp)
+		if header != nil {
+			log.Println("File already exists:", ctx, rp)
 			return
 		}
 	}
