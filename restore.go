@@ -4,8 +4,31 @@ import (
 	"log"
 	"path"
 
+	"github.com/tencentyun/cos-go-sdk-v5"
 	"go.uber.org/ratelimit"
 )
+
+func logRestoreStatus(err error) {
+	if err == nil {
+		return
+	}
+	if cos.IsNotFoundError(err) {
+		// WARN
+		log.Println("WARN: Resource is not existed")
+	} else if e, ok := cos.IsCOSError(err); ok {
+		if e.Code == "RestoreAlreadyInProgress" {
+			return
+		}
+		log.Printf("ERROR: Code: %v\n", e.Code)
+		log.Printf("ERROR: Message: %v\n", e.Message)
+		log.Printf("ERROR: Resource: %v\n", e.Resource)
+		log.Printf("ERROR: RequestId: %v\n", e.RequestID)
+		// ERROR
+	} else {
+		log.Printf("ERROR: %v\n", err)
+		// ERROR
+	}
+}
 
 func restoreChunk(config Config, cm ChunksMap) {
 	log.Println("Restoring chunks")
@@ -16,9 +39,7 @@ func restoreChunk(config Config, cm ChunksMap) {
 		rl.Take()
 		p := path.Join(config.COS.ChunkPrefix, k)
 		err := cosRestoreFile(config.COS, p)
-		if err != nil {
-			log.Println("Restore file error:", p, err)
-		}
+		logRestoreStatus(err)
 	}
 }
 

@@ -97,7 +97,7 @@ func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 			return
 		}
 	}
-	err := cosUploadFile(config.COS, rp, ctx.path, "DEEP_ARCHIVE", nil)
+	err := cosUploadFile(config.COS, rp, ctx.path, config.COS.Class, nil)
 	if err != nil {
 		log.Fatalln("Upload file error:", ctx, err)
 	}

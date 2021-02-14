@@ -24,6 +24,7 @@ type COSConfig struct {
 	ID          string
 	Key         string
 	ChunkPrefix string
+	Class       string
 }
 
 func getConfig(configFileName string) (config Config) {
@@ -31,6 +32,7 @@ func getConfig(configFileName string) (config Config) {
 	config.Threads = 4
 	config.Index = "meta.json"
 	config.COS.ChunkPrefix = "data/"
+	config.COS.Class = "DEEP_ARCHIVE"
 
 	jsonFile, err := os.Open(configFileName)
 
