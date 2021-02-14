@@ -6,6 +6,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/dustin/go-humanize"
 )
 
 func processSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
@@ -95,6 +99,80 @@ func getRemoteIndex(config Config) Index {
 	}
 	ri := loadIndex(riPath)
 	return ri
+}
+
+func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
+	deleteTime := time.Now().AddDate(0, 1, 0).Unix()
+	remoteChunkMap := buildChunksMap(*remoteIndex)
+	localChunkMap := buildChunksMap(*localIndex)
+
+	localIndex.Chunks = make(ChunkDeleteMarkMap)
+	for k, v := range remoteIndex.Chunks {
+		if v > deleteTime {
+			v = deleteTime
+		}
+		localIndex.Chunks[k] = v
+	}
+	wg := &sync.WaitGroup{}
+	ch := make(chan UploadCTX, config.Threads)
+
+	cnt := 0
+	uploadSize := int64(0)
+	totalSize := int64(0)
+
+	uploadFile := func(id int) {
+		defer wg.Done()
+		for ctx := range ch {
+			uploadPayload(config, false, ctx)
+		}
+	}
+	wg.Add(config.Threads)
+	for i := 0; i < config.Threads; i++ {
+		go uploadFile(i)
+	}
+	for fp, fi := range localIndex.Files {
+		if fi.IsDir || fi.LinkTo != "" {
+			continue
+		}
+
+		h := chunkHash(fi.Size, fi.Hash)
+		// 检查相同的chunk是否已经处理过
+		lc, _ := localChunkMap[h]
+		if lc {
+			continue
+		}
+
+		totalSize = totalSize + fi.Size
+		localChunkMap[h] = true
+		_, ok := remoteChunkMap[h]
+		if ok {
+			remoteChunkMap[h] = true
+		} else {
+			// 需要上传
+			ctx := new(UploadCTX)
+			ctx.path = fp
+			ctx.hash = h
+			cnt = cnt + 1
+			uploadSize = uploadSize + fi.Size
+			ch <- *ctx
+		}
+		_, ok = remoteIndex.Chunks[h]
+		if ok {
+			delete(localIndex.Chunks, h)
+		}
+	}
+
+	close(ch)
+	wg.Wait()
+
+	log.Println("Uploaded ", cnt, " files, ", humanize.IBytes(uint64(uploadSize)))
+	log.Println("Total chunk size: ", humanize.IBytes(uint64(totalSize)))
+	for k, v := range remoteChunkMap {
+		if !v {
+			log.Println("Marking delete chunk:", k)
+			localIndex.Chunks[k] = deleteTime
+		}
+	}
 }
 
 func backupFiles(config Config) {

@@ -10,10 +10,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"go.uber.org/ratelimit"
 )
@@ -41,14 +39,7 @@ func buildChunksMap(index Index) ChunksMap {
 
 func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 	// log.Println("Uploading:", ctx)
-	u, _ := url.Parse(config.COS.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	c := cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.COS.ID,
-			SecretKey: config.COS.Key,
-		},
-	})
+	c := cosInit(config)
 
 	rp := path.Join(config.COS.ChunkPrefix, ctx.hash)
 	if !notCheckBeforeUpload {
@@ -73,90 +64,9 @@ func uploadPayload(config Config, notCheckBeforeUpload bool, ctx UploadCTX) {
 	}
 }
 
-func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
-	deleteTime := time.Now().AddDate(0, 1, 0).Unix()
-	remoteChunkMap := buildChunksMap(*remoteIndex)
-	localChunkMap := buildChunksMap(*localIndex)
-
-	localIndex.Chunks = make(ChunkDeleteMarkMap)
-	for k, v := range remoteIndex.Chunks {
-		if v > deleteTime {
-			v = deleteTime
-		}
-		localIndex.Chunks[k] = v
-	}
-	wg := &sync.WaitGroup{}
-	ch := make(chan UploadCTX, config.Threads)
-
-	cnt := 0
-	uploadSize := int64(0)
-	totalSize := int64(0)
-
-	uploadFile := func(id int) {
-		defer wg.Done()
-		for ctx := range ch {
-			uploadPayload(config, false, ctx)
-		}
-	}
-	wg.Add(config.Threads)
-	for i := 0; i < config.Threads; i++ {
-		go uploadFile(i)
-	}
-	for fp, fi := range localIndex.Files {
-		if fi.IsDir || fi.LinkTo != "" {
-			continue
-		}
-
-		h := chunkHash(fi.Size, fi.Hash)
-		// 检查相同的chunk是否已经处理过
-		lc, _ := localChunkMap[h]
-		if lc {
-			continue
-		}
-
-		totalSize = totalSize + fi.Size
-		localChunkMap[h] = true
-		_, ok := remoteChunkMap[h]
-		if ok {
-			remoteChunkMap[h] = true
-		} else {
-			// 需要上传
-			ctx := new(UploadCTX)
-			ctx.path = fp
-			ctx.hash = h
-			cnt = cnt + 1
-			uploadSize = uploadSize + fi.Size
-			ch <- *ctx
-		}
-		_, ok = remoteIndex.Chunks[h]
-		if ok {
-			delete(localIndex.Chunks, h)
-		}
-	}
-
-	close(ch)
-	wg.Wait()
-
-	log.Println("Uploaded ", cnt, " files, ", humanize.IBytes(uint64(uploadSize)))
-	log.Println("Total chunk size: ", humanize.IBytes(uint64(totalSize)))
-	for k, v := range remoteChunkMap {
-		if !v {
-			log.Println("Marking delete chunk:", k)
-			localIndex.Chunks[k] = deleteTime
-		}
-	}
-}
-
 func downloadRemoteIndex(config Config, path string) bool {
 	log.Println("Download remote index to ", path)
-	u, _ := url.Parse(config.COS.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	c := cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.COS.ID,
-			SecretKey: config.COS.Key,
-		},
-	})
+	c := cosInit(config)
 
 	_, err := c.Object.GetToFile(context.Background(), config.Index, path, nil)
 	if err != nil {
@@ -168,14 +78,7 @@ func downloadRemoteIndex(config Config, path string) bool {
 
 func uploadRemoteIndex(config Config, content []byte) {
 	log.Println("Uploading index")
-	u, _ := url.Parse(config.COS.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	c := cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.COS.ID,
-			SecretKey: config.COS.Key,
-		},
-	})
+	c := cosInit(config)
 
 	rh := getRemoteMetaHash(config)
 	tmpfp := path.Join(config.WorkingDir, config.Index+".new")
@@ -202,14 +105,7 @@ func uploadRemoteIndex(config Config, content []byte) {
 }
 
 func getRemoteMetaHash(config Config) string {
-	u, _ := url.Parse(config.COS.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	c := cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.COS.ID,
-			SecretKey: config.COS.Key,
-		},
-	})
+	c := cosInit(config)
 	resp, err := c.Object.Head(context.Background(), config.Index, nil)
 	if err != nil {
 		return ""
@@ -219,14 +115,8 @@ func getRemoteMetaHash(config Config) string {
 
 func deleteOutdatedChunks(config Config, index *Index) {
 	now := time.Now().Unix()
-	u, _ := url.Parse(config.COS.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	c := cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.COS.ID,
-			SecretKey: config.COS.Key,
-		},
-	})
+	c := cosInit(config)
+
 	for fp, t := range index.Chunks {
 		if now > t {
 			// log.Println("Deleting remote chunk: ", fp)
@@ -242,14 +132,8 @@ func deleteOutdatedChunks(config Config, index *Index) {
 func scanRemoteChunksMap(config Config) ChunksMap {
 	log.Println("Scan remote chunks")
 	cm := make(ChunksMap)
-	u, _ := url.Parse(config.COS.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	c := cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.COS.ID,
-			SecretKey: config.COS.Key,
-		},
-	})
+
+	c := cosInit(config)
 
 	opt := &cos.BucketGetOptions{
 		Prefix:  config.COS.ChunkPrefix,
@@ -282,14 +166,7 @@ func restoreChunk(config Config, cm ChunksMap) {
 	// Download chunk from map
 	rl := ratelimit.New(90) // per second, hardcode.
 
-	u, _ := url.Parse(config.COS.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	c := cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.COS.ID,
-			SecretKey: config.COS.Key,
-		},
-	})
+	c := cosInit(config)
 
 	for k := range cm {
 		rl.Take()
@@ -313,14 +190,7 @@ func downloadChunk(config Config, cm ChunksMap) {
 	log.Println("Downloading chunks")
 	// Download chunk from map
 
-	u, _ := url.Parse(config.COS.URL)
-	b := &cos.BaseURL{BucketURL: u}
-	c := cos.NewClient(b, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:  config.COS.ID,
-			SecretKey: config.COS.Key,
-		},
-	})
+	c := cosInit(config)
 
 	for k := range cm {
 		cp := path.Join(config.TargetDir, "chunks")
@@ -345,4 +215,15 @@ func downloadChunk(config Config, cm ChunksMap) {
 			}
 		}
 	}
+}
+
+func cosInit(config Config) *cos.Client {
+	u, _ := url.Parse(config.COS.URL)
+	b := &cos.BaseURL{BucketURL: u}
+	return cos.NewClient(b, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  config.COS.ID,
+			SecretKey: config.COS.Key,
+		},
+	})
 }
