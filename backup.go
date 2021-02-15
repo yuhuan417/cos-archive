@@ -192,5 +192,6 @@ func backupFiles(config Config) {
 	deleteOutdatedChunks(config, &localIndex)
 
 	j, _ := json.MarshalIndent(localIndex, "", "  ")
+
 	uploadRemoteIndex(config, j)
 }

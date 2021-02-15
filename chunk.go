@@ -18,6 +18,18 @@ type ChunkKey struct {
 	hash string
 }
 
+// UnmarshalText for json
+func (k *ChunkKey) UnmarshalText(text []byte) error {
+	*k = parseChunkKeyFromString(string(text))
+
+	return nil
+}
+
+// MarshalText for json
+func (k ChunkKey) MarshalText() ([]byte, error) {
+	return []byte(chunkPath(k)), nil
+}
+
 // ChunksMap struct
 type ChunksMap = map[ChunkKey]bool
 

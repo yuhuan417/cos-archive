@@ -51,6 +51,7 @@ func loadIndex(path string) Index {
 
 	jsonParser := json.NewDecoder(jf)
 	if err = jsonParser.Decode(&index); err != nil {
+		log.Println("Load index error: ", path, err)
 		return index
 	}
 
