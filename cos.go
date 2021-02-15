@@ -83,7 +83,7 @@ func (c *COS) DeleteFile(file string) error {
 }
 
 // ScanFiles from cos
-func (c *COS) ScanFiles(prefix string, cb func(key string)) {
+func (c *COS) ScanFiles(prefix string, cb func(cos.Object)) {
 	opt := &cos.BucketGetOptions{
 		Prefix:  prefix,
 		MaxKeys: 1000,
@@ -94,8 +94,7 @@ func (c *COS) ScanFiles(prefix string, cb func(key string)) {
 			log.Fatalln("Scan error:", err)
 		}
 		for _, c := range v.Contents {
-			s := c.Key
-			cb(s)
+			cb(c)
 		}
 		if !v.IsTruncated {
 			break

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
 // ChunkKey in memory
@@ -48,9 +50,9 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 	log.Println("Scan remote chunks")
 	cm := make(ChunksMap)
 	c := NewCOS(config.COS)
-	c.ScanFiles(config.COS.ChunkPrefix, func(key string) {
+	c.ScanFiles(config.COS.ChunkPrefix, func(obj cos.Object) {
 		p := filepath.Clean(config.COS.ChunkPrefix) + "/"
-		k := parseChunkKeyFromString(strings.TrimPrefix(key, p))
+		k := parseChunkKeyFromString(strings.TrimPrefix(obj.Key, p))
 		cm[k] = false
 	})
 	return cm

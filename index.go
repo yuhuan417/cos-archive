@@ -11,7 +11,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
 // FileInfo struct
@@ -35,12 +40,6 @@ type Index struct {
 	Files         FileInfoMap
 	DeletedChunks ChunkDeleteMarkMap
 	config        Config
-}
-
-// Indexer ...
-type Indexer interface {
-	Load()
-	UploadRemote()
 }
 
 // NewIndex ...
@@ -78,24 +77,23 @@ func (index *Index) Load(path string) error {
 	return err
 }
 
-func (index *Index) downloadRemote(path string) error {
+func (index *Index) downloadRemote(remote string, path string) error {
 	c := NewCOS(index.config.COS)
-	log.Println("Download remote index to ", path)
-	err := c.DownloadFile(index.config.Index, path)
+	log.Println("Download remote index :", remote, path)
+	err := c.DownloadFile(remote, path)
 	if err != nil {
 		log.Println("Download index error:", err)
 	}
 	return err
 }
 
-func (index *Index) getRemoteHash() string {
+func (index *Index) getRemoteHash(p string) string {
 	c := NewCOS(index.config.COS)
-	h := c.GetHeader(index.config.Index)
+	h := c.GetHeader(p)
 
 	if h == nil {
 		return ""
 	}
-	// log.Println("remote index header:", h.Get("Last-Modified"))
 	return h.Get("x-cos-meta-hash")
 }
 
@@ -103,18 +101,15 @@ func (index *Index) getRemoteHash() string {
 func (index *Index) UploadRemote() {
 	log.Println("Uploading index")
 	content, _ := json.MarshalIndent(index, "", "  ")
-	rh := index.getRemoteHash()
 	tmpfp := path.Join(index.config.WorkingDir, index.config.Index+".new")
 	ioutil.WriteFile(tmpfp, content, 0666)
 	lh := index.metaHash(tmpfp)
-	if rh != lh {
-		hh := http.Header{}
-		hh.Add("x-cos-meta-hash", lh)
-		c := NewCOS(index.config.COS)
-		err := c.UploadFile(index.config.Index, tmpfp, "STANDARD", hh)
-		if err != nil {
-			log.Fatalln("Upload index fail:", err)
-		}
+	hh := http.Header{}
+	hh.Add("x-cos-meta-hash", lh)
+	c := NewCOS(index.config.COS)
+	err := c.UploadFile(index.config.Index+"."+strconv.FormatInt(time.Now().Unix(), 10), tmpfp, "STANDARD", hh)
+	if err != nil {
+		log.Fatalln("Upload index fail:", err)
 	}
 	fp := path.Join(index.config.WorkingDir, index.config.Index)
 	os.Rename(tmpfp, fp)
@@ -125,7 +120,28 @@ func (index *Index) LoadRemote() error {
 	log.Println("Loading remote index")
 	oldPath := path.Join(index.config.WorkingDir, index.config.Index)
 	mh := index.metaHash(oldPath)
-	rh := index.getRemoteHash()
+
+	c := NewCOS(index.config.COS)
+
+	indexList := []string{}
+	c.ScanFiles(index.config.Index, func(obj cos.Object) {
+		indexList = append(indexList, obj.LastModified)
+	})
+	sort.Slice(indexList, func(i, j int) bool {
+		p := index.config.Index + "."
+		numA, _ := strconv.ParseInt(strings.TrimPrefix(indexList[i], p), 10, 64)
+		numB, _ := strconv.ParseInt(strings.TrimPrefix(indexList[j], p), 10, 64)
+		return numB < numA
+	})
+	for i := range indexList[30:] {
+		c.DeleteFile(indexList[i])
+	}
+
+	latestIndex := ""
+	if len(indexList) > 0 {
+		latestIndex = indexList[0]
+	}
+	rh := index.getRemoteHash(latestIndex)
 	riPath := ""
 
 	var err error
@@ -137,7 +153,7 @@ func (index *Index) LoadRemote() error {
 	} else {
 		riPath = path.Join(index.config.WorkingDir, index.config.Index+".remote")
 		os.Remove(riPath)
-		err = index.downloadRemote(riPath)
+		err = index.downloadRemote(latestIndex, riPath)
 		if err != nil {
 			log.Println("Can't download remote index", err)
 		}

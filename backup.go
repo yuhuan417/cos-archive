@@ -117,8 +117,7 @@ func backupFiles(config Config) {
 	localIndex.GenerateLocal(remoteIndex)
 
 	uploadFiles(config, localIndex, remoteIndex)
+	localIndex.UploadRemote()
 
 	localIndex.DeleteOutdatedChunks()
-
-	localIndex.UploadRemote()
 }
