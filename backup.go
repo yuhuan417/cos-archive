@@ -106,6 +106,7 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	deleteTime := time.Now().AddDate(0, 1, 0).Unix()
 	remoteChunkMap := buildChunksMap(*remoteIndex)
+	remoteIndex.Files = nil
 	localChunkMap := buildChunksMap(*localIndex)
 
 	localIndex.Chunks = make(ChunkDeleteMarkMap)
