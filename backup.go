@@ -122,10 +122,9 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	uploadSize := int64(0)
 	totalSize := int64(0)
 
-	c := NewCOS(config.COS)
-
 	uploadFile := func(id int) {
 		defer wg.Done()
+		c := NewCOS(config.COS)
 		for ctx := range ch {
 			uploadPayload(c, config, ctx)
 		}
@@ -180,6 +179,9 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 }
 
 func backupFiles(config Config) {
+	// if needFSCK() {
+	// 	fsckRemote(config)
+	// }
 	remoteIndex := getRemoteIndex(config)
 	localIndex := generateLocalIndex(config, remoteIndex)
 
