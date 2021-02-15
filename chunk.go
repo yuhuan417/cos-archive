@@ -70,7 +70,7 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 	log.Println("Scan remote chunks")
 	cm := make(ChunksMap)
 	c := NewCOS(config.COS)
-	c.ScanFiles(func(key string) {
+	c.ScanFiles(config.COS.ChunkPrefix, func(key string) {
 		p := filepath.Clean(config.COS.ChunkPrefix) + "/"
 		k := parseChunkKeyFromString(strings.TrimPrefix(key, p))
 		cm[k] = false

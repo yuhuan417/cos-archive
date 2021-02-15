@@ -83,9 +83,9 @@ func (c *COS) DeleteFile(file string) error {
 }
 
 // ScanFiles from cos
-func (c *COS) ScanFiles(cb func(key string)) {
+func (c *COS) ScanFiles(prefix string, cb func(key string)) {
 	opt := &cos.BucketGetOptions{
-		Prefix:  c.config.ChunkPrefix,
+		Prefix:  prefix,
 		MaxKeys: 1000,
 	}
 	for {
@@ -101,7 +101,7 @@ func (c *COS) ScanFiles(cb func(key string)) {
 			break
 		}
 		opt = &cos.BucketGetOptions{
-			Prefix:  c.config.ChunkPrefix,
+			Prefix:  prefix,
 			MaxKeys: 1000,
 			Marker:  v.NextMarker,
 		}

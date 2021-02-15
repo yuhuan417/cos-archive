@@ -76,6 +76,7 @@ func getRemoteMetaHash(config Config) string {
 	if h == nil {
 		return ""
 	}
+	// log.Println("remote index header:", h.Get("Last-Modified"))
 	return h.Get("x-cos-meta-hash")
 }
 
