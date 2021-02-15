@@ -114,7 +114,8 @@ func browseHandler(config Config, fm FileInfoMap, dm DirMap) http.Handler {
 }
 
 func browseFiles(config Config) {
-	index := loadIndex(path.Join(config.TargetDir, config.Index))
+	index := NewIndex(config)
+	index.Load(path.Join(config.TargetDir, config.Index))
 	dm := make(DirMap)
 	for fp, fi := range index.Files {
 		dp := path.Dir(fp)

@@ -29,7 +29,12 @@ func linkFiles(config Config) {
 	}
 	// index path
 	riPath := path.Join(config.TargetDir, config.Index+".remote")
-	ri := loadIndex(riPath)
+	ri := NewIndex(config)
+	err := ri.Load(riPath)
+	if err != nil {
+		log.Fatalln("Can't load index")
+
+	}
 
 	// chunk path
 	chunksPath := path.Join(config.TargetDir, "chunks")

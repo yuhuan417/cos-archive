@@ -1,19 +1,19 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"time"
 )
 
 func fsckRemote(config Config) {
-	ri, err := getRemoteIndex(config)
+	ri := NewIndex(config)
+	err := ri.LoadRemote()
 
 	if err != nil {
 		log.Fatalln("Can't load remote index: ", err)
 	}
 
-	deleteOutdatedChunks(config, &ri)
+	ri.DeleteOutdatedChunks()
 
 	cm := scanRemoteChunksMap(config)
 
@@ -47,6 +47,5 @@ func fsckRemote(config Config) {
 		}
 	}
 
-	j, _ := json.MarshalIndent(ri, "", "  ")
-	uploadRemoteIndex(config, j)
+	ri.UploadRemote()
 }

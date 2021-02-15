@@ -1,11 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
-	"os"
 	"path"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -16,76 +13,6 @@ import (
 type UploadCTX struct {
 	localPath  string
 	remotePath string
-}
-
-func indexSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
-	// log.Println("Processsing: ", path)
-	if err != nil {
-		log.Println("On error: ", err, " Skip: ", path)
-		return err
-	}
-	if info.IsDir() {
-		for _, skip := range config.SkipList {
-			if info.Name() == skip {
-				log.Println("In skiplist: ", skip, " Skip: ", path)
-				return filepath.SkipDir
-			}
-		}
-	}
-	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
-		log.Println("Skip non-regular file: ", path)
-		return nil
-	}
-	link := ""
-	if info.Mode()&os.ModeSymlink != 0 {
-		link, _ = os.Readlink(path)
-	}
-	f := FileInfo{
-		Mode:    info.Mode(),
-		ModTime: info.ModTime().Unix(),
-		IsDir:   info.IsDir(),
-		LinkTo:  link,
-	}
-	if info.Mode().IsRegular() {
-		f.Size = info.Size()
-	}
-	index[path] = &f
-	return nil
-}
-
-func generateLocalIndex(config Config, remoteIndex Index) Index {
-	log.Println("Generating local index")
-	localIndex := Index{}
-	localIndex.Files = make(FileInfoMap)
-	localIndex.DeletedChunks = make(ChunkDeleteMarkMap)
-	for _, filePath := range config.FilePaths {
-		log.Println("Walk ", filePath)
-		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return indexSingleFile(path, info, config, localIndex.Files, err)
-		})
-
-		if err != nil {
-			continue
-		}
-	}
-	for fp, fi := range localIndex.Files {
-		if fi.IsDir || fi.LinkTo != "" {
-			continue
-		}
-		h := ""
-		if remoteFileInfo, ok := remoteIndex.Files[fp]; ok {
-			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime && remoteFileInfo.Hash != "" {
-				h = remoteFileInfo.Hash
-				// log.Println("Use cached hash ", h, " for ", fp)
-			}
-		}
-		if h == "" {
-			h = chunkHash(fp, fi.Size)
-			// log.Println("Caculated hash ", h, " for ", fp)
-		}
-		fi.Hash = h
-	}
-	return localIndex
 }
 
 func uploadPayload(c *COS, config Config, ctx UploadCTX) {
@@ -183,15 +110,15 @@ func backupFiles(config Config) {
 	// if needFSCK() {
 	// 	fsckRemote(config)
 	// }
-	remoteIndex, _ := getRemoteIndex(config)
+	remoteIndex := NewIndex(config)
+	remoteIndex.LoadRemote()
 
-	localIndex := generateLocalIndex(config, remoteIndex)
+	localIndex := NewIndex(config)
+	localIndex.GenerateLocal(remoteIndex)
 
-	uploadFiles(config, &localIndex, &remoteIndex)
+	uploadFiles(config, localIndex, remoteIndex)
 
-	deleteOutdatedChunks(config, &localIndex)
+	localIndex.DeleteOutdatedChunks()
 
-	j, _ := json.MarshalIndent(localIndex, "", "  ")
-
-	uploadRemoteIndex(config, j)
+	localIndex.UploadRemote()
 }

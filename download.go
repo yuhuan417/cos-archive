@@ -45,7 +45,8 @@ func downloadFiles(config Config) {
 	if config.TargetDir == "" {
 		log.Fatalln("Empty target dir.")
 	}
-	_, err := getRemoteIndex(config)
+	index := NewIndex(config)
+	err := index.LoadRemote()
 	if err != nil {
 		log.Fatalln("Can't download index")
 	}

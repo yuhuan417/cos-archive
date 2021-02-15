@@ -55,7 +55,8 @@ func verifySingleFile(path string, info os.FileInfo, config Config, index Index,
 }
 
 func verifyFiles(config Config) {
-	ri, err := getRemoteIndex(config)
+	ri := NewIndex(config)
+	err := ri.LoadRemote()
 	if err != nil {
 		log.Fatalln("Can't download remote index")
 		return
@@ -68,7 +69,7 @@ func verifyFiles(config Config) {
 	for _, filePath := range config.FilePaths {
 		log.Println("Walk ", filePath)
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return verifySingleFile(path, info, config, ri, cm, &uf, err)
+			return verifySingleFile(path, info, config, *ri, cm, &uf, err)
 		})
 
 		if err != nil {

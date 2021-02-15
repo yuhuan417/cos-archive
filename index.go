@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 )
 
@@ -33,9 +34,25 @@ type ChunkDeleteMarkMap = map[ChunkKey]int64
 type Index struct {
 	Files         FileInfoMap
 	DeletedChunks ChunkDeleteMarkMap
+	config        Config
 }
 
-func metaHash(path string) string {
+// Indexer ...
+type Indexer interface {
+	Load()
+	UploadRemote()
+}
+
+// NewIndex ...
+func NewIndex(config Config) *Index {
+	index := Index{}
+	index.Files = make(FileInfoMap)
+	index.DeletedChunks = make(ChunkDeleteMarkMap)
+	index.config = config
+	return &index
+}
+
+func (index *Index) metaHash(path string) string {
 	h := sha1.New()
 	f, _ := os.Open(path)
 	defer f.Close()
@@ -43,38 +60,37 @@ func metaHash(path string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func loadIndex(path string) Index {
-	index := Index{}
-	index.Files = make(FileInfoMap)
-	index.DeletedChunks = make(ChunkDeleteMarkMap)
+// Load ...
+func (index *Index) Load(path string) error {
 	jf, err := os.Open(path)
 	if err != nil {
-		return index
+		log.Println("Load index error: ", path, err)
+		return err
 	}
 	defer jf.Close()
 
 	jsonParser := json.NewDecoder(jf)
 	if err = jsonParser.Decode(&index); err != nil {
 		log.Println("Load index error: ", path, err)
-		return index
+		return err
 	}
 
-	return index
+	return err
 }
 
-func downloadRemoteIndex(config Config, path string) error {
-	c := NewCOS(config.COS)
+func (index *Index) downloadRemote(path string) error {
+	c := NewCOS(index.config.COS)
 	log.Println("Download remote index to ", path)
-	err := c.DownloadFile(config.Index, path)
+	err := c.DownloadFile(index.config.Index, path)
 	if err != nil {
 		log.Println("Download index error:", err)
 	}
 	return err
 }
 
-func getRemoteMetaHash(config Config) string {
-	c := NewCOS(config.COS)
-	h := c.GetHeader(config.Index)
+func (index *Index) getRemoteHash() string {
+	c := NewCOS(index.config.COS)
+	h := c.GetHeader(index.config.Index)
 
 	if h == nil {
 		return ""
@@ -83,31 +99,33 @@ func getRemoteMetaHash(config Config) string {
 	return h.Get("x-cos-meta-hash")
 }
 
-func uploadRemoteIndex(config Config, content []byte) {
+// UploadRemote ...
+func (index *Index) UploadRemote() {
 	log.Println("Uploading index")
-
-	rh := getRemoteMetaHash(config)
-	tmpfp := path.Join(config.WorkingDir, config.Index+".new")
+	content, _ := json.MarshalIndent(index, "", "  ")
+	rh := index.getRemoteHash()
+	tmpfp := path.Join(index.config.WorkingDir, index.config.Index+".new")
 	ioutil.WriteFile(tmpfp, content, 0666)
-	lh := metaHash(tmpfp)
+	lh := index.metaHash(tmpfp)
 	if rh != lh {
 		hh := http.Header{}
 		hh.Add("x-cos-meta-hash", lh)
-		c := NewCOS(config.COS)
-		err := c.UploadFile(config.Index, tmpfp, "STANDARD", hh)
+		c := NewCOS(index.config.COS)
+		err := c.UploadFile(index.config.Index, tmpfp, "STANDARD", hh)
 		if err != nil {
 			log.Fatalln("Upload index fail:", err)
 		}
 	}
-	fp := path.Join(config.WorkingDir, config.Index)
+	fp := path.Join(index.config.WorkingDir, index.config.Index)
 	os.Rename(tmpfp, fp)
 }
 
-func getRemoteIndex(config Config) (Index, error) {
+// LoadRemote ...
+func (index *Index) LoadRemote() error {
 	log.Println("Loading remote index")
-	oldPath := path.Join(config.WorkingDir, config.Index)
-	mh := metaHash(oldPath)
-	rh := getRemoteMetaHash(config)
+	oldPath := path.Join(index.config.WorkingDir, index.config.Index)
+	mh := index.metaHash(oldPath)
+	rh := index.getRemoteHash()
 	riPath := ""
 
 	var err error
@@ -117,18 +135,21 @@ func getRemoteIndex(config Config) (Index, error) {
 		riPath = oldPath
 		err = nil
 	} else {
-		riPath = path.Join(config.WorkingDir, config.Index+".remote")
+		riPath = path.Join(index.config.WorkingDir, index.config.Index+".remote")
 		os.Remove(riPath)
-		err = downloadRemoteIndex(config, riPath)
+		err = index.downloadRemote(riPath)
+		if err != nil {
+			log.Println("Can't download remote index", err)
+		}
 		log.Println("Download remote index to: ", riPath)
 	}
-	ri := loadIndex(riPath)
-	return ri, err
+	return index.Load(riPath)
 }
 
-func deleteOutdatedChunks(config Config, index *Index) {
+// DeleteOutdatedChunks ...
+func (index *Index) DeleteOutdatedChunks() {
 	now := time.Now().Unix()
-	c := NewCOS(config.COS)
+	c := NewCOS(index.config.COS)
 	cnt := 0
 	for fp, t := range index.DeletedChunks {
 		if now > t {
@@ -142,4 +163,72 @@ func deleteOutdatedChunks(config Config, index *Index) {
 		}
 	}
 	log.Println("Deleting outdated remote chunk: ", cnt)
+}
+
+func (index *Index) scanSingleFile(path string, info os.FileInfo, err error) error {
+	// log.Println("Processsing: ", path)
+	if err != nil {
+		log.Println("On error: ", err, " Skip: ", path)
+		return err
+	}
+	if info.IsDir() {
+		for _, skip := range index.config.SkipList {
+			if info.Name() == skip {
+				log.Println("In skiplist: ", skip, " Skip: ", path)
+				return filepath.SkipDir
+			}
+		}
+	}
+	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
+		log.Println("Skip non-regular file: ", path)
+		return nil
+	}
+	link := ""
+	if info.Mode()&os.ModeSymlink != 0 {
+		link, _ = os.Readlink(path)
+	}
+	f := FileInfo{
+		Mode:    info.Mode(),
+		ModTime: info.ModTime().Unix(),
+		IsDir:   info.IsDir(),
+		LinkTo:  link,
+	}
+	if info.Mode().IsRegular() {
+		f.Size = info.Size()
+	}
+	index.Files[path] = &f
+	return nil
+}
+
+// GenerateLocal ...
+func (index *Index) GenerateLocal(remoteIndex *Index) {
+	log.Println("Generating local index")
+	for _, filePath := range index.config.FilePaths {
+		log.Println("Walk ", filePath)
+		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+			return index.scanSingleFile(path, info, err)
+		})
+
+		if err != nil {
+			continue
+		}
+	}
+	for fp, fi := range index.Files {
+		if fi.IsDir || fi.LinkTo != "" {
+			continue
+		}
+		h := ""
+		if remoteFileInfo, ok := remoteIndex.Files[fp]; ok {
+			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime && remoteFileInfo.Hash != "" {
+				h = remoteFileInfo.Hash
+				// log.Println("Use cached hash ", h, " for ", fp)
+			}
+		}
+		if h == "" {
+			h = chunkHash(fp, fi.Size)
+			// log.Println("Caculated hash ", h, " for ", fp)
+		}
+		fi.Hash = h
+	}
+	return
 }
