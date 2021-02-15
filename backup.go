@@ -14,8 +14,8 @@ import (
 
 // UploadCTX struct
 type UploadCTX struct {
-	path string
-	hash string
+	localPath  string
+	remotePath string
 }
 
 func indexSingleFile(path string, info os.FileInfo, config Config, index FileInfoMap, err error) error {
@@ -89,7 +89,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 }
 
 func uploadPayload(c *COS, config Config, ctx UploadCTX) {
-	rp := path.Join(config.COS.ChunkPrefix, ctx.hash)
+	rp := path.Join(config.COS.ChunkPrefix, ctx.remotePath)
 
 	header := c.GetHeader(rp)
 	if header != nil {
@@ -97,7 +97,7 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 		return
 	}
 
-	err := c.UploadFile(rp, ctx.path, config.COS.Class, nil)
+	err := c.UploadFile(rp, ctx.localPath, config.COS.Class, nil)
 	if err != nil {
 		log.Fatalln("Upload file error:", ctx, err)
 	}
@@ -139,7 +139,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			continue
 		}
 
-		h := chunkPath(fi.Size, fi.Hash)
+		h := ChunkKey{fi.Size, fi.Hash}
 		// 检查相同的chunk是否已经处理过
 		lc, _ := localChunkMap[h]
 		if lc {
@@ -154,8 +154,8 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 		} else {
 			// 需要上传
 			ctx := new(UploadCTX)
-			ctx.path = fp
-			ctx.hash = h
+			ctx.localPath = fp
+			ctx.remotePath = chunkPath(h)
 			cnt = cnt + 1
 			uploadSize = uploadSize + fi.Size
 			ch <- *ctx

@@ -10,7 +10,8 @@ func downloadChunk(config Config, cm ChunksMap) {
 	log.Println("Downloading chunks")
 	// Download chunk from map
 	c := NewCOS(config.COS)
-	for k := range cm {
+	for key := range cm {
+		k := chunkPath(key)
 		cp := path.Join(config.TargetDir, "chunks", k[len(k)-2:])
 		err := os.MkdirAll(cp, 0755)
 		if err != nil {
@@ -21,8 +22,11 @@ func downloadChunk(config Config, cm ChunksMap) {
 		for {
 			log.Println("Downloading:", p)
 			if fi, err := os.Stat(lp); err == nil {
-				h := chunkHash(lp, fi.Size())
-				if chunkPath(fi.Size(), h) == k {
+				size := fi.Size()
+				h := chunkHash(lp, size)
+				ck := ChunkKey{size, h}
+
+				if ck == key {
 					log.Println("File exists. Hash matches. Good, skip.")
 					break
 				}

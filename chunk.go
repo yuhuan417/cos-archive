@@ -12,8 +12,17 @@ import (
 	"time"
 )
 
+// ChunkKey in memory
+type ChunkKey struct {
+	size int64
+	hash string
+}
+
 // ChunksMap struct
-type ChunksMap = map[string]bool
+type ChunksMap = map[ChunkKey]bool
+
+// ChunkDeleteMarkMap struct
+type ChunkDeleteMarkMap = map[ChunkKey]int64
 
 func deleteOutdatedChunks(config Config, index *Index) {
 	now := time.Now().Unix()
@@ -22,7 +31,7 @@ func deleteOutdatedChunks(config Config, index *Index) {
 	for fp, t := range index.DeletedChunks {
 		if now > t {
 			// log.Println("Deleting remote chunk: ", fp)
-			err := c.DeleteFile(fp)
+			err := c.DeleteFile(chunkPath(fp))
 			if err != nil {
 				continue
 			}
@@ -40,7 +49,7 @@ func buildChunksMap(index Index) ChunksMap {
 			continue
 		}
 
-		chunksMap[chunkPath(fi.Size, fi.Hash)] = false
+		chunksMap[ChunkKey{fi.Size, fi.Hash}] = false
 	}
 	return chunksMap
 }
@@ -51,13 +60,32 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 	c := NewCOS(config.COS)
 	c.ScanFiles(func(key string) {
 		p := filepath.Clean(config.COS.ChunkPrefix) + "/"
-		cm[strings.TrimPrefix(key, p)] = false
+		k := parseChunkKeyFromString(strings.TrimPrefix(key, p))
+		cm[k] = false
 	})
 	return cm
 }
 
-func chunkPath(size int64, hash string) string {
-	return strconv.FormatInt(size, 10) + "-" + hash
+// func chunkPath(size int64, hash string) string {
+// 	return strconv.FormatInt(size, 10) + "-" + hash
+// }
+
+func chunkPath(k ChunkKey) string {
+	return strconv.FormatInt(k.size, 10) + "-" + k.hash
+}
+
+func parseChunkKeyFromString(s string) ChunkKey {
+	k := ChunkKey{}
+	c := strings.Split(s, "-")
+	if len(c) == 2 {
+		size, err := strconv.ParseInt(c[0], 10, 64)
+		if err != nil {
+			size = 0
+		}
+		k.size = size
+		k.hash = c[1]
+	}
+	return k
 }
 
 func chunkHash(path string, size int64) string {

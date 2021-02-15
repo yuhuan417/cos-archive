@@ -25,9 +25,6 @@ type FileInfo struct {
 // FileInfoMap struct
 type FileInfoMap = map[string]*FileInfo
 
-// ChunkDeleteMarkMap struct
-type ChunkDeleteMarkMap = map[string]int64
-
 // Index struct
 type Index struct {
 	Files         FileInfoMap

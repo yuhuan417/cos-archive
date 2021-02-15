@@ -59,7 +59,7 @@ func linkFiles(config Config) {
 			continue
 		}
 		targetPath := path.Join(linkPath, fp)
-		k := chunkPath(fi.Size, fi.Hash)
+		k := chunkPath(ChunkKey{fi.Size, fi.Hash})
 		lp := path.Join(chunksPath, k[len(k)-2:], k)
 		err := os.Link(lp, targetPath)
 		if err != nil {

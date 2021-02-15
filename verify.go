@@ -39,8 +39,8 @@ func verifySingleFile(path string, info os.FileInfo, config Config, index Index,
 		f.Size = info.Size()
 		f.Hash = chunkHash(path, f.Size)
 		// log.Println("Calculate hash: ", path, f.Hash)
-		if _, ok := chunks[chunkPath(f.Size, f.Hash)]; !ok {
-			log.Println("Missing chunk: ", path, chunkPath(f.Size, f.Hash))
+		if _, ok := chunks[ChunkKey{f.Size, f.Hash}]; !ok {
+			log.Println("Missing chunk: ", path, f.Size, f.Hash)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		}
 	}

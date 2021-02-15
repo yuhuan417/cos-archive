@@ -38,7 +38,7 @@ func restoreChunk(config Config, cm ChunksMap) {
 
 	for k := range cm {
 		rl.Take()
-		p := path.Join(config.COS.ChunkPrefix, k)
+		p := path.Join(config.COS.ChunkPrefix, chunkPath(k))
 		err := c.RestoreFile(p)
 		logRestoreStatus(err)
 	}
