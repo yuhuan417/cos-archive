@@ -3,47 +3,11 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"path"
 	"time"
 )
 
-// FSCKStatus struct
-type FSCKStatus struct {
-	LastVerifySuccessful bool
-	LastBackupSuccessful bool
-	BackupCount          int
-}
-
-// NeedFSCK 检测是否需要 fsck
-// 距离上次 fsck 之后成功 backup 了 n 次
-// 或者上次 verify 失败了
-// 或者上次 backup 开始更新了网络，但是没完成，没动网络似乎没事
-func (f *FSCKStatus) NeedFSCK() bool {
-	return false
-}
-
-// SetLastVerifySuccessful set flag
-func (f *FSCKStatus) SetLastVerifySuccessful() {
-
-}
-
-// SetLastBackupSuccessful set flag
-func (f *FSCKStatus) SetLastBackupSuccessful() {
-
-}
-
-// SetBackupCount set count
-func (f *FSCKStatus) SetBackupCount() {
-
-}
-
 func fsckRemote(config Config) {
-	riPath := path.Join(config.WorkingDir, config.Index+".remote")
-	if !downloadRemoteIndex(config, riPath) {
-		log.Println("Can't download remote index")
-		return
-	}
-	ri := loadIndex(riPath)
+	ri := getRemoteIndex(config)
 
 	deleteOutdatedChunks(config, &ri)
 

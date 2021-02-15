@@ -160,7 +160,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			uploadSize = uploadSize + fi.Size
 			ch <- *ctx
 		}
-		_, ok = remoteIndex.Chunks[h]
+		_, ok = localIndex.Chunks[h]
 		if ok {
 			delete(localIndex.Chunks, h)
 		}
@@ -184,9 +184,12 @@ func backupFiles(config Config) {
 	// 	fsckRemote(config)
 	// }
 	remoteIndex := getRemoteIndex(config)
+
 	localIndex := generateLocalIndex(config, remoteIndex)
 
 	uploadFiles(config, &localIndex, &remoteIndex)
+
+	deleteOutdatedChunks(config, &localIndex)
 
 	j, _ := json.MarshalIndent(localIndex, "", "  ")
 	uploadRemoteIndex(config, j)

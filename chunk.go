@@ -18,6 +18,7 @@ type ChunksMap = map[string]bool
 func deleteOutdatedChunks(config Config, index *Index) {
 	now := time.Now().Unix()
 	c := NewCOS(config.COS)
+	cnt := 0
 	for fp, t := range index.Chunks {
 		if now > t {
 			// log.Println("Deleting remote chunk: ", fp)
@@ -26,8 +27,10 @@ func deleteOutdatedChunks(config Config, index *Index) {
 				continue
 			}
 			delete(index.Chunks, fp)
+			cnt = cnt + 1
 		}
 	}
+	log.Println("Deleting outdated remote chunk: ", cnt)
 }
 
 func buildChunksMap(index Index) ChunksMap {
