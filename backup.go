@@ -183,7 +183,7 @@ func backupFiles(config Config) {
 	// if needFSCK() {
 	// 	fsckRemote(config)
 	// }
-	remoteIndex := getRemoteIndex(config)
+	remoteIndex, _ := getRemoteIndex(config)
 
 	localIndex := generateLocalIndex(config, remoteIndex)
 

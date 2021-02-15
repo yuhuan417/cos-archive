@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"time"
 )
 
 // FileInfo struct
@@ -24,6 +25,9 @@ type FileInfo struct {
 
 // FileInfoMap struct
 type FileInfoMap = map[string]*FileInfo
+
+// ChunkDeleteMarkMap struct
+type ChunkDeleteMarkMap = map[ChunkKey]int64
 
 // Index struct
 type Index struct {
@@ -58,15 +62,14 @@ func loadIndex(path string) Index {
 	return index
 }
 
-func downloadRemoteIndex(config Config, path string) bool {
+func downloadRemoteIndex(config Config, path string) error {
 	c := NewCOS(config.COS)
 	log.Println("Download remote index to ", path)
 	err := c.DownloadFile(config.Index, path)
 	if err != nil {
 		log.Println("Download index error:", err)
-		return false
 	}
-	return true
+	return err
 }
 
 func getRemoteMetaHash(config Config) string {
@@ -100,21 +103,43 @@ func uploadRemoteIndex(config Config, content []byte) {
 	os.Rename(tmpfp, fp)
 }
 
-func getRemoteIndex(config Config) Index {
+func getRemoteIndex(config Config) (Index, error) {
 	log.Println("Loading remote index")
 	oldPath := path.Join(config.WorkingDir, config.Index)
 	mh := metaHash(oldPath)
 	rh := getRemoteMetaHash(config)
 	riPath := ""
 
+	var err error
+
 	if mh == rh {
 		log.Println("Hash match, using local old index.")
 		riPath = oldPath
+		err = nil
 	} else {
 		riPath = path.Join(config.WorkingDir, config.Index+".remote")
-		downloadRemoteIndex(config, riPath)
+		os.Remove(riPath)
+		err = downloadRemoteIndex(config, riPath)
 		log.Println("Download remote index to: ", riPath)
 	}
 	ri := loadIndex(riPath)
-	return ri
+	return ri, err
+}
+
+func deleteOutdatedChunks(config Config, index *Index) {
+	now := time.Now().Unix()
+	c := NewCOS(config.COS)
+	cnt := 0
+	for fp, t := range index.DeletedChunks {
+		if now > t {
+			// log.Println("Deleting remote chunk: ", fp)
+			err := c.DeleteFile(chunkPath(fp))
+			if err != nil {
+				continue
+			}
+			delete(index.DeletedChunks, fp)
+			cnt = cnt + 1
+		}
+	}
+	log.Println("Deleting outdated remote chunk: ", cnt)
 }

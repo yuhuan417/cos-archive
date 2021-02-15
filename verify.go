@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 )
 
@@ -56,12 +55,11 @@ func verifySingleFile(path string, info os.FileInfo, config Config, index Index,
 }
 
 func verifyFiles(config Config) {
-	riPath := path.Join(config.WorkingDir, config.Index+".remote")
-	if !downloadRemoteIndex(config, riPath) {
+	ri, err := getRemoteIndex(config)
+	if err != nil {
 		log.Fatalln("Can't download remote index")
 		return
 	}
-	ri := loadIndex(riPath)
 
 	cm := scanRemoteChunksMap(config)
 

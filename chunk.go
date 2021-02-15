@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ChunkKey in memory
@@ -32,27 +31,6 @@ func (k ChunkKey) MarshalText() ([]byte, error) {
 
 // ChunksMap struct
 type ChunksMap = map[ChunkKey]bool
-
-// ChunkDeleteMarkMap struct
-type ChunkDeleteMarkMap = map[ChunkKey]int64
-
-func deleteOutdatedChunks(config Config, index *Index) {
-	now := time.Now().Unix()
-	c := NewCOS(config.COS)
-	cnt := 0
-	for fp, t := range index.DeletedChunks {
-		if now > t {
-			// log.Println("Deleting remote chunk: ", fp)
-			err := c.DeleteFile(chunkPath(fp))
-			if err != nil {
-				continue
-			}
-			delete(index.DeletedChunks, fp)
-			cnt = cnt + 1
-		}
-	}
-	log.Println("Deleting outdated remote chunk: ", cnt)
-}
 
 func buildChunksMap(index Index) ChunksMap {
 	chunksMap := make(ChunksMap)

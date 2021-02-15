@@ -45,8 +45,8 @@ func downloadFiles(config Config) {
 	if config.TargetDir == "" {
 		log.Fatalln("Empty target dir.")
 	}
-	riPath := path.Join(config.TargetDir, config.Index+".remote")
-	if !downloadRemoteIndex(config, riPath) {
+	_, err := getRemoteIndex(config)
+	if err != nil {
 		log.Fatalln("Can't download index")
 	}
 	cm := scanRemoteChunksMap(config)

@@ -7,7 +7,11 @@ import (
 )
 
 func fsckRemote(config Config) {
-	ri := getRemoteIndex(config)
+	ri, err := getRemoteIndex(config)
+
+	if err != nil {
+		log.Fatalln("Can't load remote index: ", err)
+	}
 
 	deleteOutdatedChunks(config, &ri)
 
