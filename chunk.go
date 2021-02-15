@@ -19,14 +19,14 @@ func deleteOutdatedChunks(config Config, index *Index) {
 	now := time.Now().Unix()
 	c := NewCOS(config.COS)
 	cnt := 0
-	for fp, t := range index.Chunks {
+	for fp, t := range index.DeletedChunks {
 		if now > t {
 			// log.Println("Deleting remote chunk: ", fp)
 			err := c.DeleteFile(fp)
 			if err != nil {
 				continue
 			}
-			delete(index.Chunks, fp)
+			delete(index.DeletedChunks, fp)
 			cnt = cnt + 1
 		}
 	}

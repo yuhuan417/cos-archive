@@ -57,7 +57,7 @@ func generateLocalIndex(config Config, remoteIndex Index) Index {
 	log.Println("Generating local index")
 	localIndex := Index{}
 	localIndex.Files = make(FileInfoMap)
-	localIndex.Chunks = make(ChunkDeleteMarkMap)
+	localIndex.DeletedChunks = make(ChunkDeleteMarkMap)
 	for _, filePath := range config.FilePaths {
 		log.Println("Walk ", filePath)
 		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
@@ -109,12 +109,12 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	remoteIndex.Files = nil
 	localChunkMap := buildChunksMap(*localIndex)
 
-	localIndex.Chunks = make(ChunkDeleteMarkMap)
-	for k, v := range remoteIndex.Chunks {
+	localIndex.DeletedChunks = make(ChunkDeleteMarkMap)
+	for k, v := range remoteIndex.DeletedChunks {
 		if v > deleteTime {
 			v = deleteTime
 		}
-		localIndex.Chunks[k] = v
+		localIndex.DeletedChunks[k] = v
 	}
 	wg := &sync.WaitGroup{}
 	ch := make(chan UploadCTX, config.Threads)
@@ -160,9 +160,9 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			uploadSize = uploadSize + fi.Size
 			ch <- *ctx
 		}
-		_, ok = localIndex.Chunks[h]
+		_, ok = localIndex.DeletedChunks[h]
 		if ok {
-			delete(localIndex.Chunks, h)
+			delete(localIndex.DeletedChunks, h)
 		}
 	}
 
@@ -174,7 +174,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	for k, v := range remoteChunkMap {
 		if !v {
 			log.Println("Marking delete chunk:", k)
-			localIndex.Chunks[k] = deleteTime
+			localIndex.DeletedChunks[k] = deleteTime
 		}
 	}
 }

@@ -30,8 +30,8 @@ type ChunkDeleteMarkMap = map[string]int64
 
 // Index struct
 type Index struct {
-	Files  FileInfoMap
-	Chunks ChunkDeleteMarkMap
+	Files         FileInfoMap
+	DeletedChunks ChunkDeleteMarkMap
 }
 
 func metaHash(path string) string {
@@ -45,7 +45,7 @@ func metaHash(path string) string {
 func loadIndex(path string) Index {
 	index := Index{}
 	index.Files = make(FileInfoMap)
-	index.Chunks = make(ChunkDeleteMarkMap)
+	index.DeletedChunks = make(ChunkDeleteMarkMap)
 	jf, err := os.Open(path)
 	if err != nil {
 		return index

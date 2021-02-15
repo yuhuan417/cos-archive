@@ -26,12 +26,12 @@ func fsckRemote(config Config) {
 		}
 	}
 
-	for k := range ri.Chunks {
+	for k := range ri.DeletedChunks {
 		_, ok := cm[k]
 		if ok {
 			cm[k] = true
 		} else {
-			delete(ri.Chunks, k)
+			delete(ri.DeletedChunks, k)
 		}
 	}
 
@@ -39,7 +39,7 @@ func fsckRemote(config Config) {
 	for k, v := range cm {
 		if !v {
 			log.Println("Lost found chunk", k)
-			ri.Chunks[k] = forever
+			ri.DeletedChunks[k] = forever
 		}
 	}
 
