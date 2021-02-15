@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/ioutil"
 	"log"
@@ -125,7 +126,7 @@ func (index *Index) LoadRemote() error {
 
 	indexList := []string{}
 	c.ScanFiles(index.config.Index, func(obj cos.Object) {
-		indexList = append(indexList, obj.LastModified)
+		indexList = append(indexList, obj.Key)
 	})
 	sort.Slice(indexList, func(i, j int) bool {
 		p := index.config.Index + "."
@@ -133,27 +134,29 @@ func (index *Index) LoadRemote() error {
 		numB, _ := strconv.ParseInt(strings.TrimPrefix(indexList[j], p), 10, 64)
 		return numB < numA
 	})
-	for i := range indexList[30:] {
-		c.DeleteFile(indexList[i])
+	if len(indexList) > 30 {
+		for i := 30; i < len(indexList); i++ {
+			c.DeleteFile(indexList[i])
+		}
 	}
 
 	latestIndex := ""
 	if len(indexList) > 0 {
 		latestIndex = indexList[0]
+		log.Println("Using latest index: ", latestIndex)
+	} else {
+		return errors.New("No remote index")
 	}
 	rh := index.getRemoteHash(latestIndex)
 	riPath := ""
 
-	var err error
-
 	if mh == rh {
 		log.Println("Hash match, using local old index.")
 		riPath = oldPath
-		err = nil
 	} else {
 		riPath = path.Join(index.config.WorkingDir, index.config.Index+".remote")
 		os.Remove(riPath)
-		err = index.downloadRemote(latestIndex, riPath)
+		err := index.downloadRemote(latestIndex, riPath)
 		if err != nil {
 			log.Println("Can't download remote index", err)
 		}
