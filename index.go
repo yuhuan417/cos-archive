@@ -193,7 +193,7 @@ func (index *Index) scanSingleFile(path string, info os.FileInfo, err error) err
 	if info.IsDir() {
 		for _, skip := range index.config.SkipList {
 			if info.Name() == skip {
-				log.Println("In skiplist: ", skip, " Skip: ", path)
+				// log.Println("In skiplist: ", skip, " Skip: ", path)
 				return filepath.SkipDir
 			}
 		}
