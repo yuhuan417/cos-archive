@@ -20,6 +20,9 @@ import (
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
+// HashType ...
+type HashType string
+
 // FileInfo struct
 type FileInfo struct {
 	Size    int64
@@ -27,7 +30,20 @@ type FileInfo struct {
 	ModTime int64
 	IsDir   bool
 	LinkTo  string
-	Hash    string
+	Hash    HashType
+}
+
+// UnmarshalText for json
+func (h *HashType) UnmarshalText(text []byte) error {
+	b, _ := hex.DecodeString(string(text))
+	*h = HashType(b)
+
+	return nil
+}
+
+// MarshalText for json
+func (h HashType) MarshalText() ([]byte, error) {
+	return []byte(hex.EncodeToString([]byte(h))), nil
 }
 
 // FileInfoMap struct
@@ -236,7 +252,7 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 		if fi.IsDir || fi.LinkTo != "" {
 			continue
 		}
-		h := ""
+		var h HashType = ""
 		if remoteFileInfo, ok := remoteIndex.Files[fp]; ok {
 			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime && remoteFileInfo.Hash != "" {
 				h = remoteFileInfo.Hash

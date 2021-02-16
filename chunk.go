@@ -16,7 +16,7 @@ import (
 // ChunkKey in memory
 type ChunkKey struct {
 	size int64
-	hash string
+	hash HashType
 }
 
 // UnmarshalText for json
@@ -58,12 +58,8 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 	return cm
 }
 
-// func chunkPath(size int64, hash string) string {
-// 	return strconv.FormatInt(size, 10) + "-" + hash
-// }
-
 func chunkPath(k ChunkKey) string {
-	return strconv.FormatInt(k.size, 10) + "-" + k.hash
+	return strconv.FormatInt(k.size, 10) + "-" + hex.EncodeToString([]byte(k.hash))
 }
 
 func parseChunkKeyFromString(s string) ChunkKey {
@@ -75,12 +71,13 @@ func parseChunkKeyFromString(s string) ChunkKey {
 			size = 0
 		}
 		k.size = size
-		k.hash = c[1]
+		h, _ := hex.DecodeString(c[1])
+		k.hash = HashType(h)
 	}
 	return k
 }
 
-func chunkHash(path string, size int64) string {
+func chunkHash(path string, size int64) HashType {
 	// xunlei hash
 	h := sha1.New()
 	f, _ := os.Open(path)
@@ -94,5 +91,5 @@ func chunkHash(path string, size int64) string {
 		f.Seek(size-0x5000, 0)
 		io.CopyN(h, f, 0x5000)
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	return HashType(h.Sum(nil))
 }
