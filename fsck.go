@@ -27,6 +27,7 @@ func fsckRemote(config Config) {
 			cm[ch] = true
 		} else {
 			delete(ri.Files, fp)
+			log.Println("Chunk lost:", fp, chunkPath(ch))
 		}
 	}
 
@@ -36,6 +37,7 @@ func fsckRemote(config Config) {
 			cm[k] = true
 		} else {
 			delete(ri.DeletedChunks, k)
+			log.Println("Deleted chunk lost:", chunkPath(k))
 		}
 	}
 
