@@ -30,14 +30,16 @@ func fsckRemote(config Config) {
 			log.Println("Chunk lost:", fp, chunkPath(ch))
 		}
 	}
-
-	for k := range ri.DeletedChunks {
+	now := time.Now().Unix()
+	for k, t := range ri.DeletedChunks {
 		_, ok := cm[k]
 		if ok {
 			cm[k] = true
 		} else {
 			delete(ri.DeletedChunks, k)
-			log.Println("Deleted chunk lost:", chunkPath(k))
+			if t < now {
+				log.Println("Deleted chunk lost:", chunkPath(k))
+			}
 		}
 	}
 

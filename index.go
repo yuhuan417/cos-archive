@@ -121,23 +121,25 @@ func (index *Index) UploadRemote() {
 	tmpfp := path.Join(index.config.WorkingDir, index.config.Index+".new")
 	ioutil.WriteFile(tmpfp, content, 0666)
 	lh := index.metaHash(tmpfp)
-	hh := http.Header{}
-	hh.Add("x-cos-meta-hash", lh)
-	c := NewCOS(index.config.COS)
-	err := c.UploadFile(index.config.Index+"."+strconv.FormatInt(time.Now().Unix(), 10), tmpfp, "STANDARD", hh)
+	latestIndex, err := index.getLatestIndex()
 	if err != nil {
-		log.Fatalln("Upload index fail:", err)
+		log.Println("Not found remote index.")
+	}
+	rh := index.getRemoteHash(latestIndex)
+	if lh != rh {
+		hh := http.Header{}
+		hh.Add("x-cos-meta-hash", lh)
+		c := NewCOS(index.config.COS)
+		err := c.UploadFile(index.config.Index+"."+strconv.FormatInt(time.Now().Unix(), 10), tmpfp, "STANDARD", hh)
+		if err != nil {
+			log.Fatalln("Upload index fail:", err)
+		}
 	}
 	fp := path.Join(index.config.WorkingDir, index.config.Index)
 	os.Rename(tmpfp, fp)
 }
 
-// LoadRemote ...
-func (index *Index) LoadRemote() error {
-	log.Println("Loading remote index")
-	oldPath := path.Join(index.config.WorkingDir, index.config.Index)
-	mh := index.metaHash(oldPath)
-
+func (index *Index) getLatestIndex() (string, error) {
 	c := NewCOS(index.config.COS)
 
 	indexList := []string{}
@@ -157,12 +159,28 @@ func (index *Index) LoadRemote() error {
 	}
 
 	latestIndex := ""
+	var err error
+	err = nil
 	if len(indexList) > 0 {
 		latestIndex = indexList[0]
 		log.Println("Using latest index: ", latestIndex)
 	} else {
-		return errors.New("No remote index")
+		err = errors.New("No remote index")
 	}
+	return latestIndex, err
+}
+
+// LoadRemote ...
+func (index *Index) LoadRemote() error {
+	log.Println("Loading remote index")
+	oldPath := path.Join(index.config.WorkingDir, index.config.Index)
+	mh := index.metaHash(oldPath)
+
+	latestIndex, err := index.getLatestIndex()
+	if err != nil {
+		log.Println("Not found remote index.")
+	}
+
 	rh := index.getRemoteHash(latestIndex)
 	riPath := ""
 
