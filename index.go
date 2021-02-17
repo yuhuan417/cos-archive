@@ -135,7 +135,7 @@ func (index *Index) UploadRemote() {
 			log.Fatalln("Upload index fail:", err)
 		}
 	} else {
-		log.Println("Hash matched, old index is good enough:", err)
+		log.Println("Hash matched, old index is good enough")
 	}
 	fp := path.Join(index.config.WorkingDir, index.config.Index)
 	os.Rename(tmpfp, fp)
