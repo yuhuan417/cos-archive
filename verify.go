@@ -3,39 +3,42 @@ package main
 import (
 	"log"
 	"os"
-	"path/filepath"
+
+	"github.com/karrick/godirwalk"
 )
 
-func verifySingleFile(path string, info os.FileInfo, config Config, index Index, chunks ChunksMap, unmatchedFiles *[]string, err error) error {
+func verifySingleFile(path string, de *godirwalk.Dirent, config Config, index Index, chunks ChunksMap, unmatchedFiles *[]string) error {
 	// log.Println("Verifying: ", path)
-	if err != nil {
-		log.Println("On error: ", err, " Skip: ", path)
-		return err
-	}
-	if info.IsDir() {
+	if de.IsDir() {
 		for _, skip := range config.SkipList {
-			if info.Name() == skip {
+			if de.Name() == skip {
 				// log.Println("In skiplist: ", skip, " Skip: ", path)
-				return filepath.SkipDir
+				return godirwalk.SkipThis
 			}
 		}
 	}
-	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
+	if !de.IsDir() && !de.IsRegular() && !de.IsSymlink() {
 		log.Println("Skip non-regular file: ", path)
 		return nil
 	}
 	link := ""
-	if info.Mode()&os.ModeSymlink != 0 {
+	if de.IsSymlink() {
 		link, _ = os.Readlink(path)
 	}
 	f := FileInfo{
-		Mode:    info.Mode(),
-		ModTime: info.ModTime().Unix(),
-		IsDir:   info.IsDir(),
-		LinkTo:  link,
+		Mode:   de.ModeType(),
+		IsDir:  de.IsDir(),
+		LinkTo: link,
 	}
-	if info.Mode().IsRegular() {
-		f.Size = info.Size()
+	if de.IsRegular() {
+		fi, err := os.Stat(path)
+		if err != nil {
+			log.Println("Can't stat file:", path)
+			return err
+		}
+		f.ModTime = fi.ModTime().Unix()
+		f.Size = fi.Size()
+
 		f.Hash = chunkHash(path, f.Size)
 		// log.Println("Calculate hash: ", path, f.Hash)
 		if _, ok := chunks[ChunkKey{f.Size, f.Hash}]; !ok {
@@ -68,8 +71,11 @@ func verifyFiles(config Config) {
 
 	for _, filePath := range config.FilePaths {
 		log.Println("Walk ", filePath)
-		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return verifySingleFile(path, info, config, *ri, cm, &uf, err)
+		err := godirwalk.Walk(filePath, &godirwalk.Options{
+			Callback: func(path string, de *godirwalk.Dirent) error {
+				return verifySingleFile(path, de, config, *ri, cm, &uf)
+			},
+			Unsorted: true, // (optional) set true for faster yet non-deterministic enumeration (see godoc)
 		})
 
 		if err != nil {
