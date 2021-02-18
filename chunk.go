@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"io"
@@ -16,19 +17,39 @@ import (
 // ChunkKey in memory
 type ChunkKey struct {
 	size int64
-	hash HashType
+	hash HashType // sha1
 }
 
-// UnmarshalText for json
-func (k *ChunkKey) UnmarshalText(text []byte) error {
-	*k = parseChunkKeyFromString(string(text))
+func parseInt64FromBytes(b []byte) int64 {
+	r := int64(0)
+	for _, i := range b {
+		r = r*10 + int64(i-'0')
+	}
+	return r
+}
 
+// UnmarshalText decode ChunkKey from json
+func (k *ChunkKey) UnmarshalText(text []byte) error {
+	*k = ChunkKey{}
+	c := bytes.Split(text, []byte("-"))
+	if len(c) == 2 {
+		k.size = parseInt64FromBytes(c[0])
+		err := k.hash.UnmarshalText(c[1])
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-// MarshalText for json
+// MarshalText encode ChunkKey to json
 func (k ChunkKey) MarshalText() ([]byte, error) {
-	return []byte(chunkPath(k)), nil
+	b := []byte("")
+	b = strconv.AppendInt(b, k.size, 10)
+	b = append(b, '-')
+	h, _ := k.hash.MarshalText()
+	b = append(b, h...)
+	return b, nil
 }
 
 // ChunksMap struct
@@ -59,7 +80,7 @@ func scanRemoteChunksMap(config Config) ChunksMap {
 }
 
 func chunkPath(k ChunkKey) string {
-	return strconv.FormatInt(k.size, 10) + "-" + hex.EncodeToString([]byte(k.hash))
+	return strconv.FormatInt(k.size, 10) + "-" + hex.EncodeToString(k.hash[:])
 }
 
 func parseChunkKeyFromString(s string) ChunkKey {
@@ -72,7 +93,7 @@ func parseChunkKeyFromString(s string) ChunkKey {
 		}
 		k.size = size
 		h, _ := hex.DecodeString(c[1])
-		k.hash = HashType(h)
+		copy(k.hash[:], h)
 	}
 	return k
 }
@@ -91,5 +112,7 @@ func chunkHash(path string, size int64) HashType {
 		f.Seek(size-0x5000, 0)
 		io.CopyN(h, f, 0x5000)
 	}
-	return HashType(h.Sum(nil))
+	var b HashType
+	copy(b[:], h.Sum(nil))
+	return b
 }
