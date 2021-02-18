@@ -11,12 +11,12 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/karrick/godirwalk"
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
@@ -220,36 +220,38 @@ func (index *Index) DeleteOutdatedChunks() {
 	log.Println("Deleting outdated remote chunk: ", cnt)
 }
 
-func (index *Index) scanSingleFile(path string, info os.FileInfo, err error) error {
+func (index *Index) scanSingleFile(path string, de *godirwalk.Dirent) error {
 	// log.Println("Processsing: ", path)
-	if err != nil {
-		log.Println("On error: ", err, " Skip: ", path)
-		return err
-	}
-	if info.IsDir() {
+	if de.IsDir() {
 		for _, skip := range index.config.SkipList {
-			if info.Name() == skip {
+			if de.Name() == skip {
 				// log.Println("In skiplist: ", skip, " Skip: ", path)
-				return filepath.SkipDir
+				return godirwalk.SkipThis
 			}
 		}
 	}
-	if !info.IsDir() && !info.Mode().IsRegular() && (info.Mode()&os.ModeSymlink == 0) {
+	if !de.IsDir() && !de.IsRegular() && !de.IsSymlink() {
 		log.Println("Skip non-regular file: ", path)
 		return nil
 	}
 	link := ""
-	if info.Mode()&os.ModeSymlink != 0 {
+	if de.IsSymlink() {
 		link, _ = os.Readlink(path)
 	}
+
 	f := FileInfo{
-		Mode:    info.Mode(),
-		ModTime: info.ModTime().Unix(),
-		IsDir:   info.IsDir(),
-		LinkTo:  link,
+		Mode:   de.ModeType(),
+		IsDir:  de.IsDir(),
+		LinkTo: link,
 	}
-	if info.Mode().IsRegular() {
-		f.Size = info.Size()
+	if de.IsRegular() {
+		fi, err := os.Stat(path)
+		if err != nil {
+			log.Println("Can't stat file:", path)
+			return err
+		}
+		f.ModTime = fi.ModTime().Unix()
+		f.Size = fi.Size()
 	}
 	index.Files[path] = &f
 	return nil
@@ -260,8 +262,12 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 	log.Println("Generating local index")
 	for _, filePath := range index.config.FilePaths {
 		log.Println("Walk ", filePath)
-		err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-			return index.scanSingleFile(path, info, err)
+
+		err := godirwalk.Walk(filePath, &godirwalk.Options{
+			Callback: func(path string, de *godirwalk.Dirent) error {
+				return index.scanSingleFile(path, de)
+			},
+			Unsorted: true, // (optional) set true for faster yet non-deterministic enumeration (see godoc)
 		})
 
 		if err != nil {
