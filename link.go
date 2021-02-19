@@ -41,28 +41,24 @@ func linkFiles(config Config) {
 
 	// linking path
 	linkPath := path.Join(config.TargetDir, "restore")
-
-	for fp, fi := range ri.Files {
+	for fp, fi := range ri.Entries.Dirs {
 		targetPath := path.Join(linkPath, fp)
-		if fi.IsDir {
-			err := os.MkdirAll(targetPath, fi.Mode)
-			if err != nil {
-				log.Fatal("MkdirAll error:", targetPath, err)
-			}
-			continue
-		}
-		if fi.LinkTo != "" {
-			err := os.Symlink(fi.LinkTo, targetPath)
-			if err != nil {
-				log.Fatal("Symlink error:", targetPath, fi.LinkTo, err)
-			}
-			continue
+		err := os.MkdirAll(targetPath, fi.Mode)
+		if err != nil {
+			log.Fatal("MkdirAll error:", targetPath, err)
 		}
 	}
-	for fp, fi := range ri.Files {
-		if fi.IsDir || fi.LinkTo != "" {
-			continue
+
+	for fp, fi := range ri.Entries.Links {
+		targetPath := path.Join(linkPath, fp)
+		err := os.Symlink(fi.LinkTo, targetPath)
+		if err != nil {
+			log.Fatal("Symlink error:", targetPath, fi.LinkTo, err)
 		}
+		continue
+	}
+
+	for fp, fi := range ri.Entries.Files {
 		targetPath := path.Join(linkPath, fp)
 		k := chunkPath(ChunkKey{fi.Size, fi.Hash})
 		lp := path.Join(chunksPath, k[len(k)-2:], k)

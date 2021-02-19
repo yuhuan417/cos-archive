@@ -33,7 +33,9 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	deleteTime := time.Now().AddDate(0, 1, 0).Unix()
 	remoteChunkMap := buildChunksMap(*remoteIndex)
-	remoteIndex.Files = nil
+	remoteIndex.Entries.Files = nil
+	remoteIndex.Entries.Dirs = nil
+	remoteIndex.Entries.Links = nil
 	localChunkMap := buildChunksMap(*localIndex)
 
 	localIndex.DeletedChunks = make(ChunkDeleteMarkMap)
@@ -61,11 +63,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	for i := 0; i < config.Threads; i++ {
 		go uploadFile(i)
 	}
-	for fp, fi := range localIndex.Files {
-		if fi.IsDir || fi.LinkTo != "" {
-			continue
-		}
-
+	for fp, fi := range localIndex.Entries.Files {
 		h := ChunkKey{fi.Size, fi.Hash}
 		// 检查相同的chunk是否已经处理过
 		lc, _ := localChunkMap[h]

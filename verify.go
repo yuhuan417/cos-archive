@@ -16,19 +16,31 @@ func verifySingleFile(path string, de *godirwalk.Dirent, config Config, index In
 				return godirwalk.SkipThis
 			}
 		}
-	}
-	if !de.IsDir() && !de.IsRegular() && !de.IsSymlink() {
-		log.Println("Skip non-regular file: ", path)
+		d := DirInfo{
+			Mode: de.ModeType(),
+		}
+		if fi, ok := index.Entries.Dirs[path]; !ok {
+			log.Println("Missing meta(dir): ", path)
+			*unmatchedFiles = append(*unmatchedFiles, path)
+		} else if d != *fi {
+			log.Println("Unmatched meta(dir): ", path, d, fi)
+			*unmatchedFiles = append(*unmatchedFiles, path)
+		}
 		return nil
 	}
-	link := ""
 	if de.IsSymlink() {
-		link, _ = os.Readlink(path)
-	}
-	f := FileInfo{
-		Mode:   de.ModeType(),
-		IsDir:  de.IsDir(),
-		LinkTo: link,
+		link, _ := os.Readlink(path)
+		l := LinkInfo{
+			LinkTo: link,
+		}
+		if fi, ok := index.Entries.Links[path]; !ok {
+			log.Println("Missing meta(link): ", path)
+			*unmatchedFiles = append(*unmatchedFiles, path)
+		} else if l != *fi {
+			log.Println("Unmatched meta(link): ", path, l, fi)
+			*unmatchedFiles = append(*unmatchedFiles, path)
+		}
+		return nil
 	}
 	if de.IsRegular() {
 		fi, err := os.Stat(path)
@@ -36,8 +48,11 @@ func verifySingleFile(path string, de *godirwalk.Dirent, config Config, index In
 			log.Println("Can't stat file:", path)
 			return err
 		}
-		f.ModTime = fi.ModTime().Unix()
-		f.Size = fi.Size()
+		f := RFileInfo{
+			Mode:    fi.Mode(),
+			ModTime: fi.ModTime().Unix(),
+			Size:    fi.Size(),
+		}
 
 		f.Hash = chunkHash(path, f.Size)
 		// log.Println("Calculate hash: ", path, f.Hash)
@@ -45,16 +60,17 @@ func verifySingleFile(path string, de *godirwalk.Dirent, config Config, index In
 			log.Println("Missing chunk: ", path, f.Size, f.Hash)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		}
+		if fi, ok := index.Entries.Files[path]; !ok {
+			log.Println("Missing meta: ", path)
+			*unmatchedFiles = append(*unmatchedFiles, path)
+		} else if f != *fi {
+			log.Println("Unmatched meta: ", path, f, fi)
+			*unmatchedFiles = append(*unmatchedFiles, path)
+		}
+		return nil
 	}
-	if fi, ok := index.Files[path]; !ok {
-		log.Println("Missing meta: ", path)
-		*unmatchedFiles = append(*unmatchedFiles, path)
-	} else if f != *fi {
-		log.Println("Unmatched meta: ", path, f, fi)
-		*unmatchedFiles = append(*unmatchedFiles, path)
-	}
+	log.Println("Skip non-regular file: ", path)
 	return nil
-
 }
 
 func verifyFiles(config Config) {

@@ -17,16 +17,13 @@ func fsckRemote(config Config) {
 
 	cm := scanRemoteChunksMap(config)
 
-	for fp, fi := range ri.Files {
-		if fi.IsDir || fi.LinkTo != "" {
-			continue
-		}
+	for fp, fi := range ri.Entries.Files {
 		ch := ChunkKey{fi.Size, fi.Hash}
 		_, ok := cm[ch]
 		if ok {
 			cm[ch] = true
 		} else {
-			delete(ri.Files, fp)
+			delete(ri.Entries.Files, fp)
 			log.Println("Chunk lost:", fp, chunkPath(ch))
 		}
 	}

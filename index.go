@@ -23,13 +23,21 @@ import (
 // HashType ...
 type HashType [20]byte
 
-// FileInfo struct
-type FileInfo struct {
+// DirInfo ...
+type DirInfo struct {
+	Mode os.FileMode
+}
+
+// LinkInfo ...
+type LinkInfo struct {
+	LinkTo string
+}
+
+// RFileInfo struct
+type RFileInfo struct {
 	Size    int64
 	Mode    os.FileMode
 	ModTime int64
-	IsDir   bool
-	LinkTo  string
 	Hash    HashType
 }
 
@@ -56,14 +64,27 @@ func (h HashType) MarshalText() ([]byte, error) {
 }
 
 // FileInfoMap struct
-type FileInfoMap = map[string]*FileInfo
+type FileInfoMap = map[string]*RFileInfo
+
+// DirInfoMap struct
+type DirInfoMap = map[string]*DirInfo
+
+// LinkInfoMap struct
+type LinkInfoMap = map[string]*LinkInfo
 
 // ChunkDeleteMarkMap struct
 type ChunkDeleteMarkMap = map[ChunkKey]int64
 
+// DirEnt ...
+type DirEnt struct {
+	Files FileInfoMap
+	Dirs  DirInfoMap
+	Links LinkInfoMap
+}
+
 // Index struct
 type Index struct {
-	Files         FileInfoMap
+	Entries       DirEnt
 	DeletedChunks ChunkDeleteMarkMap
 	config        Config
 }
@@ -71,7 +92,9 @@ type Index struct {
 // NewIndex ...
 func NewIndex(config Config) *Index {
 	index := Index{}
-	index.Files = make(FileInfoMap)
+	index.Entries.Files = make(FileInfoMap)
+	index.Entries.Dirs = make(DirInfoMap)
+	index.Entries.Links = make(LinkInfoMap)
 	index.DeletedChunks = make(ChunkDeleteMarkMap)
 	index.config = config
 	return &index
@@ -238,20 +261,19 @@ func (index *Index) scanSingleFile(path string, de *godirwalk.Dirent) error {
 				return godirwalk.SkipThis
 			}
 		}
-	}
-	if !de.IsDir() && !de.IsRegular() && !de.IsSymlink() {
-		log.Println("Skip non-regular file: ", path)
+		d := DirInfo{
+			Mode: de.ModeType(),
+		}
+		index.Entries.Dirs[path] = &d
 		return nil
 	}
-	link := ""
 	if de.IsSymlink() {
-		link, _ = os.Readlink(path)
-	}
-
-	f := FileInfo{
-		Mode:   de.ModeType(),
-		IsDir:  de.IsDir(),
-		LinkTo: link,
+		link, _ := os.Readlink(path)
+		l := LinkInfo{
+			LinkTo: link,
+		}
+		index.Entries.Links[path] = &l
+		return nil
 	}
 	if de.IsRegular() {
 		fi, err := os.Stat(path)
@@ -259,10 +281,15 @@ func (index *Index) scanSingleFile(path string, de *godirwalk.Dirent) error {
 			log.Println("Can't stat file:", path)
 			return err
 		}
-		f.ModTime = fi.ModTime().Unix()
-		f.Size = fi.Size()
+		f := RFileInfo{
+			Mode:    fi.Mode(),
+			ModTime: fi.ModTime().Unix(),
+			Size:    fi.Size(),
+		}
+		index.Entries.Files[path] = &f
+		return nil
 	}
-	index.Files[path] = &f
+	log.Println("Skip non-regular file: ", path)
 	return nil
 }
 
@@ -283,13 +310,10 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 			continue
 		}
 	}
-	for fp, fi := range index.Files {
-		if fi.IsDir || fi.LinkTo != "" {
-			continue
-		}
+	for fp, fi := range index.Entries.Files {
 		var h HashType
 		cachedHash := false
-		if remoteFileInfo, ok := remoteIndex.Files[fp]; ok {
+		if remoteFileInfo, ok := remoteIndex.Entries.Files[fp]; ok {
 			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime {
 				h = remoteFileInfo.Hash
 				cachedHash = true

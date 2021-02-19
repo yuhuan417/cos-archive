@@ -57,11 +57,7 @@ type ChunksMap = map[ChunkKey]bool
 
 func buildChunksMap(index Index) ChunksMap {
 	chunksMap := make(ChunksMap)
-	for _, fi := range index.Files {
-		if fi.IsDir || fi.LinkTo != "" {
-			continue
-		}
-
+	for _, fi := range index.Entries.Files {
 		chunksMap[ChunkKey{fi.Size, fi.Hash}] = false
 	}
 	return chunksMap
