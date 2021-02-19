@@ -48,7 +48,7 @@ func verifySingleFile(path string, de *godirwalk.Dirent, config Config, index In
 			log.Println("Can't stat file:", path)
 			return err
 		}
-		f := RFileInfo{
+		f := FileInfo{
 			Mode:    fi.Mode(),
 			ModTime: fi.ModTime().Unix(),
 			Size:    fi.Size(),

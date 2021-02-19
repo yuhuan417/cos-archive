@@ -33,8 +33,8 @@ type LinkInfo struct {
 	LinkTo string
 }
 
-// RFileInfo struct
-type RFileInfo struct {
+// FileInfo struct
+type FileInfo struct {
 	Size    int64
 	Mode    os.FileMode
 	ModTime int64
@@ -64,7 +64,7 @@ func (h HashType) MarshalText() ([]byte, error) {
 }
 
 // FileInfoMap struct
-type FileInfoMap = map[string]*RFileInfo
+type FileInfoMap = map[string]*FileInfo
 
 // DirInfoMap struct
 type DirInfoMap = map[string]*DirInfo
@@ -281,7 +281,7 @@ func (index *Index) scanSingleFile(path string, de *godirwalk.Dirent) error {
 			log.Println("Can't stat file:", path)
 			return err
 		}
-		f := RFileInfo{
+		f := FileInfo{
 			Mode:    fi.Mode(),
 			ModTime: fi.ModTime().Unix(),
 			Size:    fi.Size(),

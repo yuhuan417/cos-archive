@@ -106,7 +106,7 @@ func handleDir(m DirEnt, p string, w http.ResponseWriter, r *http.Request) {
 </html>`)
 }
 
-func handleFile(config Config, fi *RFileInfo, p string, w http.ResponseWriter, r *http.Request) {
+func handleFile(config Config, fi *FileInfo, p string, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.Header().Set("X-Content-Type-Options", "no-sniff")
 	fmt.Fprintf(w, `
