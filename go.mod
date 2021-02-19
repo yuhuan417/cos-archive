@@ -7,6 +7,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/karrick/godirwalk v1.16.1
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.19
+	github.com/ugorji/go/codec v1.2.4
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/ratelimit v0.1.0
 )

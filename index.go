@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -18,6 +17,8 @@ import (
 
 	"github.com/karrick/godirwalk"
 	"github.com/tencentyun/cos-go-sdk-v5"
+	"github.com/ugorji/go/codec"
+	_ "github.com/ugorji/go/codec"
 )
 
 // HashType ...
@@ -117,8 +118,11 @@ func (index *Index) Load(path string) error {
 	}
 	defer jf.Close()
 
-	jsonParser := json.NewDecoder(jf)
-	if err = jsonParser.Decode(&index); err != nil {
+	var h codec.Handle = new(codec.JsonHandle)
+	var dec *codec.Decoder = codec.NewDecoder(jf, h)
+	err = dec.Decode(index)
+
+	if err != nil {
 		log.Println("Load index error: ", path, err)
 		return err
 	}
@@ -153,9 +157,10 @@ func (index *Index) UploadRemote() {
 	if err != nil {
 		log.Fatal("Write index error:", err)
 	}
-	je := json.NewEncoder(w)
-	je.SetIndent("", "  ")
-	err = je.Encode(index)
+
+	var h codec.Handle = new(codec.JsonHandle)
+	var enc *codec.Encoder = codec.NewEncoder(w, h)
+	err = enc.Encode(index)
 	if err != nil {
 		log.Fatal("Encode index json error:", err)
 	}
