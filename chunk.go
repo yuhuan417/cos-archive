@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"io"
@@ -21,6 +22,37 @@ type ChunkKey struct {
 
 // ChunksMap struct
 type ChunksMap = map[ChunkKey]bool
+func parseInt64FromBytes(b []byte) int64 {
+	r := int64(0)
+	for _, i := range b {
+		r = r*10 + int64(i-'0')
+	}
+	return r
+}
+
+// UnmarshalText decode ChunkKey from json
+func (k *ChunkKey) UnmarshalText(text []byte) error {
+	*k = ChunkKey{}
+	c := bytes.Split(text, []byte("-"))
+	if len(c) == 2 {
+		k.size = parseInt64FromBytes(c[0])
+		err := k.hash.UnmarshalText(c[1])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// MarshalText encode ChunkKey to json
+func (k ChunkKey) MarshalText() ([]byte, error) {
+	b := []byte("")
+	b = strconv.AppendInt(b, k.size, 10)
+	b = append(b, '-')
+	h, _ := k.hash.MarshalText()
+	b = append(b, h...)
+	return b, nil
+}
 
 func buildChunksMap(index Index) ChunksMap {
 	chunksMap := make(ChunksMap)

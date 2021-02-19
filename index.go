@@ -155,7 +155,10 @@ func (index *Index) UploadRemote() {
 	}
 	je := json.NewEncoder(w)
 	je.SetIndent("", "  ")
-	je.Encode(index)
+	err = je.Encode(index)
+	if err != nil {
+		log.Fatal("Encode index json error:", err)
+	}
 	tmpfp := w.Name()
 	w.Close()
 
