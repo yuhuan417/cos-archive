@@ -177,7 +177,9 @@ func (index *Index) UploadRemote() {
 		hh := http.Header{}
 		hh.Add("x-cos-meta-hash", lh)
 		c := NewCOS(index.config.COS)
-		err := c.UploadFile(index.config.Index+"."+strconv.FormatInt(time.Now().Unix(), 10), tmpfp, "STANDARD", hh)
+		newName := index.config.Index + "." + strconv.FormatInt(time.Now().Unix(), 10)
+		log.Println("Upload index to :", newName)
+		err := c.UploadFile(newName, tmpfp, "STANDARD", hh)
 		if err != nil {
 			log.Fatalln("Upload index fail:", err)
 		}
@@ -185,7 +187,10 @@ func (index *Index) UploadRemote() {
 		log.Println("Hash matched, old index is good enough")
 	}
 	fp := path.Join(index.config.WorkingDir, index.config.Index)
-	os.Rename(tmpfp, fp)
+	err = os.Rename(tmpfp, fp)
+	if err != nil {
+		log.Fatal("Index rename error: ", err)
+	}
 }
 
 func (index *Index) getLatestIndex() (string, error) {
