@@ -157,9 +157,8 @@ func (index *Index) UploadRemote() {
 	if err != nil {
 		log.Fatal("Write index error:", err)
 	}
-
-	var h codec.Handle = new(codec.JsonHandle)
-	var enc *codec.Encoder = codec.NewEncoder(w, h)
+	jh := codec.JsonHandle{Indent: 2}
+	var enc *codec.Encoder = codec.NewEncoder(w, &jh)
 	err = enc.Encode(index)
 	if err != nil {
 		log.Fatal("Encode index json error:", err)
