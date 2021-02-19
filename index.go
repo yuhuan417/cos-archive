@@ -21,7 +21,7 @@ import (
 )
 
 // HashType ...
-type HashType string
+type HashType [20]byte
 
 // FileInfo struct
 type FileInfo struct {
@@ -33,17 +33,26 @@ type FileInfo struct {
 	Hash    HashType
 }
 
-// UnmarshalText for json
+// UnmarshalText from json
 func (h *HashType) UnmarshalText(text []byte) error {
-	b, _ := hex.DecodeString(string(text))
-	*h = HashType(b)
-
-	return nil
+	if len(text) == 0 {
+		h = &HashType{}
+		return nil
+	}
+	th := h[:]
+	_, err := hex.Decode(th, text)
+	return err
 }
 
-// MarshalText for json
+// MarshalText to json
 func (h HashType) MarshalText() ([]byte, error) {
-	return []byte(hex.EncodeToString([]byte(h))), nil
+	empty := HashType{}
+	if h == empty {
+		return make([]byte, 0), nil
+	}
+	b := make([]byte, hex.EncodedLen(len(h)))
+	hex.Encode(b, h[:])
+	return b, nil
 }
 
 // FileInfoMap struct
@@ -278,14 +287,16 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 		if fi.IsDir || fi.LinkTo != "" {
 			continue
 		}
-		var h HashType = ""
+		var h HashType
+		cachedHash := false
 		if remoteFileInfo, ok := remoteIndex.Files[fp]; ok {
-			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime && remoteFileInfo.Hash != "" {
+			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime {
 				h = remoteFileInfo.Hash
+				cachedHash = true
 				// log.Println("Use cached hash ", h, " for ", fp)
 			}
 		}
-		if h == "" {
+		if !cachedHash {
 			h = chunkHash(fp, fi.Size)
 			// log.Println("Caculated hash ", h, " for ", fp)
 		}
