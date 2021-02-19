@@ -149,9 +149,16 @@ func (index *Index) getRemoteHash(p string) string {
 // UploadRemote ...
 func (index *Index) UploadRemote() {
 	log.Println("Uploading index")
-	content, _ := json.MarshalIndent(index, "", "  ")
-	tmpfp := path.Join(index.config.WorkingDir, index.config.Index+".new")
-	ioutil.WriteFile(tmpfp, content, 0666)
+	w, err := ioutil.TempFile(index.config.WorkingDir, index.config.Index+".*.new")
+	if err != nil {
+		log.Fatal("Write index error:", err)
+	}
+	je := json.NewEncoder(w)
+	je.SetIndent("", "  ")
+	je.Encode(index)
+	tmpfp := w.Name()
+	w.Close()
+
 	lh := index.metaHash(tmpfp)
 	latestIndex, err := index.getLatestIndex()
 	if err != nil {
