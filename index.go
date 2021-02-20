@@ -118,8 +118,10 @@ func (index *Index) Load(path string) error {
 	}
 	defer jf.Close()
 
+	jh := codec.JsonHandle{}
+	jh.ReaderBufferSize = 8192
 	var h codec.Handle = new(codec.JsonHandle)
-	var dec *codec.Decoder = codec.NewDecoder(jf, h)
+		var dec *codec.Decoder = codec.NewDecoder(jf, h)
 	err = dec.Decode(index)
 
 	if err != nil {
@@ -158,6 +160,8 @@ func (index *Index) UploadRemote() {
 		log.Fatal("Write index error:", err)
 	}
 	jh := codec.JsonHandle{Indent: 2}
+	h := new(codec.JsonHandle)
+	h.WriterBufferSize = 8192
 	var enc *codec.Encoder = codec.NewEncoder(w, &jh)
 	err = enc.Encode(index)
 	if err != nil {
