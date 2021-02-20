@@ -120,8 +120,8 @@ func (index *Index) Load(path string) error {
 
 	jh := codec.JsonHandle{}
 	jh.ReaderBufferSize = 8192
-	var h codec.Handle = new(codec.JsonHandle)
-		var dec *codec.Decoder = codec.NewDecoder(jf, h)
+
+	var dec *codec.Decoder = codec.NewDecoder(jf, &jh)
 	err = dec.Decode(index)
 
 	if err != nil {
