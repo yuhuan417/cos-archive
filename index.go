@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -155,7 +154,7 @@ func (index *Index) getRemoteHash(p string) string {
 // UploadRemote ...
 func (index *Index) UploadRemote() {
 	log.Println("Uploading index")
-	w, err := ioutil.TempFile(index.config.WorkingDir, index.config.Index+".*.new")
+	w, err := os.CreateTemp(index.config.WorkingDir, index.config.Index+".*.new")
 	if err != nil {
 		log.Fatal("Write index error:", err)
 	}
