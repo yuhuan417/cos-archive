@@ -1,23 +1,23 @@
 package main
 
 import (
+	"io/fs"
 	"log"
 	"os"
-
-	"github.com/karrick/godirwalk"
+	"path/filepath"
 )
 
-func verifySingleFile(path string, de *godirwalk.Dirent, config Config, index Index, chunks ChunksMap, unmatchedFiles *[]string) error {
+func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, chunks ChunksMap, unmatchedFiles *[]string) error {
 	// log.Println("Verifying: ", path)
 	if de.IsDir() {
 		for _, skip := range config.SkipList {
 			if de.Name() == skip {
 				// log.Println("In skiplist: ", skip, " Skip: ", path)
-				return godirwalk.SkipThis
+				return filepath.SkipDir
 			}
 		}
 		d := DirInfo{
-			Mode: de.ModeType(),
+			Mode: de.Type().Perm(),
 		}
 		if fi, ok := index.Entries.Dirs[path]; !ok {
 			log.Println("Missing meta(dir): ", path)
@@ -28,7 +28,7 @@ func verifySingleFile(path string, de *godirwalk.Dirent, config Config, index In
 		}
 		return nil
 	}
-	if de.IsSymlink() {
+	if de.Type()&fs.ModeSymlink != 0 {
 		link, _ := os.Readlink(path)
 		l := LinkInfo{
 			LinkTo: link,
@@ -42,8 +42,8 @@ func verifySingleFile(path string, de *godirwalk.Dirent, config Config, index In
 		}
 		return nil
 	}
-	if de.IsRegular() {
-		fi, err := os.Stat(path)
+	if de.Type().IsRegular() {
+		fi, err := de.Info()
 		if err != nil {
 			log.Println("Can't stat file:", path)
 			return err
@@ -87,11 +87,11 @@ func verifyFiles(config Config) {
 
 	for _, filePath := range config.FilePaths {
 		log.Println("Walk ", filePath)
-		err := godirwalk.Walk(filePath, &godirwalk.Options{
-			Callback: func(path string, de *godirwalk.Dirent) error {
-				return verifySingleFile(path, de, config, *ri, cm, &uf)
-			},
-			Unsorted: true, // (optional) set true for faster yet non-deterministic enumeration (see godoc)
+		err := filepath.WalkDir(filePath, func(path string, de fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			return verifySingleFile(path, de, config, *ri, cm, &uf)
 		})
 
 		if err != nil {

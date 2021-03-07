@@ -5,16 +5,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/karrick/godirwalk"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"github.com/ugorji/go/codec"
 	_ "github.com/ugorji/go/codec"
@@ -274,22 +275,22 @@ func (index *Index) DeleteOutdatedChunks() {
 	log.Println("Deleting outdated remote chunk: ", cnt)
 }
 
-func (index *Index) scanSingleFile(path string, de *godirwalk.Dirent) error {
+func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 	// log.Println("Processsing: ", path)
 	if de.IsDir() {
 		for _, skip := range index.config.SkipList {
 			if de.Name() == skip {
 				// log.Println("In skiplist: ", skip, " Skip: ", path)
-				return godirwalk.SkipThis
+				return filepath.SkipDir
 			}
 		}
 		d := DirInfo{
-			Mode: de.ModeType(),
+			Mode: de.Type().Perm(),
 		}
 		index.Entries.Dirs[path] = &d
 		return nil
 	}
-	if de.IsSymlink() {
+	if de.Type()&fs.ModeSymlink != 0 {
 		link, _ := os.Readlink(path)
 		l := LinkInfo{
 			LinkTo: link,
@@ -297,8 +298,8 @@ func (index *Index) scanSingleFile(path string, de *godirwalk.Dirent) error {
 		index.Entries.Links[path] = &l
 		return nil
 	}
-	if de.IsRegular() {
-		fi, err := os.Stat(path)
+	if de.Type().IsRegular() {
+		fi, err := de.Info()
 		if err != nil {
 			log.Println("Can't stat file:", path)
 			return err
@@ -321,11 +322,11 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 	for _, filePath := range index.config.FilePaths {
 		log.Println("Walk ", filePath)
 
-		err := godirwalk.Walk(filePath, &godirwalk.Options{
-			Callback: func(path string, de *godirwalk.Dirent) error {
-				return index.scanSingleFile(path, de)
-			},
-			Unsorted: true, // (optional) set true for faster yet non-deterministic enumeration (see godoc)
+		err := filepath.WalkDir(filePath, func(path string, de fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			return index.scanSingleFile(path, de)
 		})
 
 		if err != nil {
