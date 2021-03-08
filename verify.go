@@ -16,8 +16,13 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 				return filepath.SkipDir
 			}
 		}
+		fi, err := de.Info()
+		if err != nil {
+			log.Println("Can't stat file:", path)
+			return err
+		}
 		d := DirInfo{
-			Mode: de.Type().Perm(),
+			Mode: fi.Mode().Perm(),
 		}
 		if fi, ok := index.Entries.Dirs[path]; !ok {
 			log.Println("Missing meta(dir): ", path)
@@ -49,7 +54,7 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 			return err
 		}
 		f := FileInfo{
-			Mode:    fi.Mode(),
+			Mode:    fi.Mode().Perm(),
 			ModTime: fi.ModTime().Unix(),
 			Size:    fi.Size(),
 		}

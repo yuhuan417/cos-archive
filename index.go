@@ -284,8 +284,13 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 				return filepath.SkipDir
 			}
 		}
+		fi, err := de.Info()
+		if err != nil {
+			log.Println("Can't stat file:", path)
+			return err
+		}
 		d := DirInfo{
-			Mode: de.Type().Perm(),
+			Mode: fi.Mode().Perm(),
 		}
 		index.Entries.Dirs[path] = &d
 		return nil
@@ -305,7 +310,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 			return err
 		}
 		f := FileInfo{
-			Mode:    fi.Mode(),
+			Mode:    fi.Mode().Perm(),
 			ModTime: fi.ModTime().Unix(),
 			Size:    fi.Size(),
 		}
