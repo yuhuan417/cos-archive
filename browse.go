@@ -139,7 +139,6 @@ func handleLink(config Config, fi *LinkInfo, p string, w http.ResponseWriter, r 
 
 	fmt.Fprintf(w, "%s links to %s", p, fi.LinkTo)
 	fmt.Fprintf(w, "</body></html>")
-	return
 }
 
 func browseHandler(config Config, entries DirEnt, dm DirMap) http.Handler {
@@ -165,8 +164,6 @@ func browseHandler(config Config, entries DirEnt, dm DirMap) http.Handler {
 			return
 		}
 		http.Error(w, "404 not found.", http.StatusNotFound)
-		return
-
 	})
 }
 

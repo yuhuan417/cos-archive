@@ -4,24 +4,8 @@ import (
 	"log"
 	"os"
 	"path"
-	"syscall"
 	"time"
 )
-
-func hardlinkCount(fp string) uint64 {
-	fi, err := os.Stat(fp)
-	if err != nil {
-		log.Println(err)
-		return uint64(0)
-	}
-	nlink := uint64(0)
-	if sys := fi.Sys(); sys != nil {
-		if stat, ok := sys.(*syscall.Stat_t); ok {
-			nlink = uint64(stat.Nlink)
-		}
-	}
-	return nlink
-}
 
 func linkFiles(config Config) {
 	if config.TargetDir == "" {

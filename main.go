@@ -20,7 +20,6 @@ func runCMD(cmd string, check bool) {
 	if err != nil && check {
 		log.Println("runCMD failed: ", cmd)
 	}
-	return
 }
 
 func main() {

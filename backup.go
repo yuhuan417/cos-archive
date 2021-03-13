@@ -66,7 +66,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	for fp, fi := range localIndex.Entries.Files {
 		h := ChunkKey{fi.Size, fi.Hash}
 		// 检查相同的chunk是否已经处理过
-		lc, _ := localChunkMap[h]
+		lc := localChunkMap[h]
 		if lc {
 			continue
 		}

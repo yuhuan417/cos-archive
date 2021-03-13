@@ -105,7 +105,6 @@ func (c *COS) ScanFiles(prefix string, cb func(cos.Object)) {
 			Marker:  v.NextMarker,
 		}
 	}
-	return
 }
 
 // RestoreFile from COS

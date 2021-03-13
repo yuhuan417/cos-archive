@@ -18,7 +18,6 @@ import (
 
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"github.com/ugorji/go/codec"
-	_ "github.com/ugorji/go/codec"
 )
 
 // HashType ...
@@ -45,7 +44,7 @@ type FileInfo struct {
 // UnmarshalText from json
 func (h *HashType) UnmarshalText(text []byte) error {
 	if len(text) == 0 {
-		h = &HashType{}
+		*h = HashType{}
 		return nil
 	}
 	th := h[:]
@@ -222,7 +221,7 @@ func (index *Index) getLatestIndex() (string, error) {
 		latestIndex = indexList[0]
 		log.Println("Using latest index: ", latestIndex)
 	} else {
-		err = errors.New("No remote index")
+		err = errors.New("NO REMOTE IDEX")
 	}
 	return latestIndex, err
 }
@@ -354,5 +353,4 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 		}
 		fi.Hash = h
 	}
-	return
 }
