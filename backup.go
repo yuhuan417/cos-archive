@@ -98,7 +98,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	log.Println("Total chunk size: ", humanize.IBytes(uint64(totalSize)))
 	for k, v := range remoteChunkMap {
 		if !v {
-			log.Println("Marking delete chunk:", k)
+			log.Println("Marking delete chunk:", chunkPath(k))
 			localIndex.DeletedChunks[k] = deleteTime
 		}
 	}
