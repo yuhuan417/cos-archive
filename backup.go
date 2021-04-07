@@ -28,6 +28,7 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 	if err != nil {
 		log.Fatalln("Upload file error:", ctx, err)
 	}
+	log.Println("Uploaded:", ctx.localPath)
 }
 
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
