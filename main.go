@@ -51,6 +51,7 @@ func main() {
 		log.Println("Action: link")
 		linkFiles(config)
 	} else {
+		runCMD("mkdir -p /backup", false)
 		runCMD("umount /backup", false)
 		runCMD("lvremove -f /dev/vg1/backup", false)
 		runCMD("lvcreate -L 300G -s -n backup /dev/vg1/volume_1", true)
