@@ -53,9 +53,9 @@ func main() {
 	} else {
 		runCMD("mkdir -p /backup", false)
 		runCMD("umount /backup", false)
-		runCMD("lvremove -f /dev/vg1/backup", false)
-		runCMD("lvcreate -L 300G -s -n backup /dev/vg1/volume_1", true)
-		runCMD("mount /dev/vg1/backup /backup", true)
+		runCMD("lvremove -f /dev/vg3/backup", false)
+		runCMD("lvcreate -L 60G -s -n backup /dev/vg3/volume_2", true)
+		runCMD("mount /dev/vg3/backup /backup", true)
 
 		if *action == "backup" {
 			log.Println("Action: backup")
@@ -68,6 +68,6 @@ func main() {
 			verifyFiles(config)
 		}
 		runCMD("umount /backup", false)
-		runCMD("lvremove -f /dev/vg1/backup", false)
+		runCMD("lvremove -f /dev/vg3/backup", false)
 	}
 }
