@@ -46,6 +46,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 		}
 		localIndex.DeletedChunks[k] = v
 	}
+
 	wg := &sync.WaitGroup{}
 	ch := make(chan UploadCTX, config.Threads)
 
@@ -103,6 +104,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			localIndex.DeletedChunks[k] = deleteTime
 		}
 	}
+	localIndex.DeleteOutdatedChunks()
 }
 
 func backupFiles(config Config) {
@@ -114,7 +116,6 @@ func backupFiles(config Config) {
 
 	localIndex := NewIndex(config)
 	localIndex.GenerateLocal(remoteIndex)
-	localIndex.DeleteOutdatedChunks()
 
 	uploadFiles(config, localIndex, remoteIndex)
 	localIndex.UploadRemote()
