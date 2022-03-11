@@ -8,6 +8,7 @@ import (
 
 // Config struct
 type Config struct {
+	BasePath   string
 	FilePaths  []string
 	SkipList   []string
 	Threads    int

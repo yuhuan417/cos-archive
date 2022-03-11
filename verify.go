@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -92,11 +93,11 @@ func verifyFiles(config Config) {
 
 	for _, filePath := range config.FilePaths {
 		log.Println("Walk ", filePath)
-		err := filepath.WalkDir(filePath, func(path string, de fs.DirEntry, err error) error {
+		err := filepath.WalkDir(path.Join(config.BasePath, filePath), func(p string, de fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			return verifySingleFile(path, de, config, *ri, cm, &uf)
+			return verifySingleFile(p, de, config, *ri, cm, &uf)
 		})
 
 		if err != nil {

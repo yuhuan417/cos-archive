@@ -2,15 +2,18 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path"
+	"time"
 
 	"github.com/allan-simon/go-singleinstance"
 )
 
 func runCMD(cmd string, check bool) {
+	fmt.Println(cmd)
 	c := exec.Command("bash", "-c", cmd)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
@@ -51,11 +54,13 @@ func main() {
 		log.Println("Action: link")
 		linkFiles(config)
 	} else {
-		runCMD("mkdir -p /backup", false)
-		runCMD("umount /backup", false)
-		runCMD("lvremove -f /dev/vg3/backup", false)
-		runCMD("lvcreate -L 60G -s -n backup /dev/vg3/volume_2", true)
-		runCMD("mount /dev/vg3/backup /backup", true)
+		runCMD("mkdir -p "+path.Join(config.WorkingDir, "backup"), false)
+
+		// /share/CACHEDEV1_DATA/Public/@Recently-Snapshot/GMT+08_2022-03-11_0100
+		now := time.Now()
+		s := "/share/CACHEDEV1_DATA/Public/@Recently-Snapshot/GMT+08_" + now.Format("2006-01-02") + "_0100"
+		runCMD("rm -f "+path.Join(config.WorkingDir, "/backup/Recently-Snapshot"), false)
+		runCMD("ln -s -f "+s+" "+path.Join(config.WorkingDir, "/backup/Recently-Snapshot"), false)
 
 		if *action == "backup" {
 			log.Println("Action: backup")
@@ -67,7 +72,5 @@ func main() {
 			log.Println("Action: verify")
 			verifyFiles(config)
 		}
-		runCMD("umount /backup", false)
-		runCMD("lvremove -f /dev/vg3/backup", false)
 	}
 }

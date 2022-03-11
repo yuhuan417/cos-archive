@@ -285,7 +285,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 		}
 		fi, err := de.Info()
 		if err != nil {
-			log.Println("Can't stat file:", path)
+			log.Println("Can't stat dir:", path)
 			return err
 		}
 		d := DirInfo{
@@ -306,7 +306,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 		fi, err := de.Info()
 		if err != nil {
 			log.Println("Can't stat file:", path)
-			return err
+			return nil
 		}
 		f := FileInfo{
 			Mode:    fi.Mode().Perm(),
@@ -326,7 +326,7 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 	for _, filePath := range index.config.FilePaths {
 		log.Println("Walk ", filePath)
 
-		err := filepath.WalkDir(filePath, func(path string, de fs.DirEntry, err error) error {
+		err := filepath.WalkDir(path.Join(index.config.BasePath, filePath), func(path string, de fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
