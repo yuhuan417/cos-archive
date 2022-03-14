@@ -286,7 +286,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 		fi, err := de.Info()
 		if err != nil {
 			log.Println("Can't stat dir:", path)
-			return err
+			return nil
 		}
 		d := DirInfo{
 			Mode: fi.Mode().Perm(),
