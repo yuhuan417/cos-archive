@@ -59,8 +59,8 @@ func main() {
 		// /share/CACHEDEV1_DATA/Public/@Recently-Snapshot/GMT+08_2022-03-11_0100
 		now := time.Now()
 		s := "/share/CACHEDEV1_DATA/Public/@Recently-Snapshot/GMT+08_" + now.Format("2006-01-02") + "_0100"
-		runCMD("rm -f "+path.Join(config.WorkingDir, "/backup/Recently-Snapshot"), false)
-		runCMD("ln -s -f "+s+" "+path.Join(config.WorkingDir, "/backup/Recently-Snapshot"), false)
+		runCMD("rm -f "+path.Join(config.WorkingDir, "/Recently-Snapshot"), false)
+		runCMD("ln -s -f "+s+" "+path.Join(config.WorkingDir, "/Recently-Snapshot"), false)
 
 		if *action == "backup" {
 			log.Println("Action: backup")
