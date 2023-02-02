@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"path"
 	"sync"
 	"time"
@@ -26,7 +27,11 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 
 	err := c.UploadFile(rp, ctx.localPath, config.COS.Class, nil)
 	if err != nil {
-		log.Fatalln("Upload file error:", ctx, err)
+		if os.IsNotExist(err) {
+			log.Println("Local file not exist:", ctx, err)
+		} else {
+			log.Fatalln("Upload file error:", ctx, err)
+		}
 	}
 	log.Println("Uploaded:", ctx.localPath)
 }
