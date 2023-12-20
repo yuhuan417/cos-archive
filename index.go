@@ -274,7 +274,9 @@ func (index *Index) DeleteOutdatedChunks() {
 					lmt = t.AddDate(0, 0, 180).Unix()
 				}
 			}
-			index.DeletedChunks[fp] = lmt
+			if lmt > t {
+				index.DeletedChunks[fp] = lmt
+			}
 			if now > lmt {
 				err := c.DeleteFile(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
 				if err != nil {
