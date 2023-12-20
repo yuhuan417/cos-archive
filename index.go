@@ -262,13 +262,27 @@ func (index *Index) DeleteOutdatedChunks() {
 	cnt := 0
 	for fp, t := range index.DeletedChunks {
 		if now > t {
+			var lmt int64 = 0
 			// log.Println("Deleting remote chunk: ", fp)
-			err := c.DeleteFile(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
-			if err != nil {
-				continue
+			h := c.GetHeader(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
+			if h != nil {
+				lm := h.Get("Last-Modified")
+				layout := "Mon, 2 Jan 2006 15:04:05 MST"
+
+				t, err := time.Parse(layout, lm)
+				if err == nil {
+					lmt = t.AddDate(0, 0, 180).Unix()
+				}
 			}
-			delete(index.DeletedChunks, fp)
-			cnt = cnt + 1
+			index.DeletedChunks[fp] = lmt
+			if now > lmt {
+				err := c.DeleteFile(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
+				if err != nil {
+					continue
+				}
+				delete(index.DeletedChunks, fp)
+				cnt = cnt + 1
+			}
 		}
 	}
 	log.Println("Deleting outdated remote chunk: ", cnt)
