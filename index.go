@@ -275,6 +275,7 @@ func (index *Index) DeleteOutdatedChunks() {
 				}
 			}
 			if lmt > t {
+				log.Println("Fix time for ", fp, " from ", t, " to ", lmt)
 				index.DeletedChunks[fp] = lmt
 			}
 			if now > lmt {

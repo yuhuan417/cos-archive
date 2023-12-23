@@ -46,7 +46,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 
 	localIndex.DeletedChunks = make(ChunkDeleteMarkMap)
 	for k, v := range remoteIndex.DeletedChunks {
-		if v > deleteTime {
+		if v > time.Now().AddDate(3, 0, 0).Unix() {
 			v = deleteTime
 		}
 		localIndex.DeletedChunks[k] = v
