@@ -263,7 +263,6 @@ func (index *Index) DeleteOutdatedChunks() {
 	for fp, t := range index.DeletedChunks {
 		if now > t {
 			var lmt int64 = 0
-			// log.Println("Deleting remote chunk: ", fp)
 			h := c.GetHeader(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
 			if h != nil {
 				lm := h.Get("Last-Modified")
@@ -279,6 +278,7 @@ func (index *Index) DeleteOutdatedChunks() {
 				index.DeletedChunks[fp] = lmt
 			}
 			if now > lmt {
+				log.Println("Deleting remote chunk: ", fp)
 				err := c.DeleteFile(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
 				if err != nil {
 					continue
