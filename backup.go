@@ -37,7 +37,7 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 }
 
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
-	deleteTime := time.Now().AddDate(0, 6, 0).Unix()
+	deleteTime := time.Now().AddDate(0, 0, 7).Unix()
 	remoteChunkMap := buildChunksMap(*remoteIndex)
 	remoteIndex.Entries.Files = nil
 	remoteIndex.Entries.Dirs = nil
