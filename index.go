@@ -158,6 +158,7 @@ func (index *Index) UploadRemote() {
 	if err != nil {
 		log.Fatal("Write index error:", err)
 	}
+	defer w.Close()
 	jh := codec.JsonHandle{Indent: 2}
 	h := new(codec.JsonHandle)
 	h.WriterBufferSize = 8192
@@ -167,7 +168,6 @@ func (index *Index) UploadRemote() {
 		log.Fatal("Encode index json error:", err)
 	}
 	tmpfp := w.Name()
-	w.Close()
 
 	lh := index.metaHash(tmpfp)
 	latestIndex, err := index.getLatestIndex()
