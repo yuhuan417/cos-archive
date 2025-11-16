@@ -63,7 +63,7 @@ func buildChunksMap(index Index) ChunksMap {
 }
 
 func scanRemoteChunksMap(config Config) ChunksMap {
-	slog.Info("Scan remote chunks")
+	slog.Debug("Scan remote chunks")
 	cm := make(ChunksMap)
 	c := NewCOS(config.COS)
 	c.ScanFiles(config.COS.ChunkPrefix, func(obj cos.Object) {

@@ -112,7 +112,7 @@ func (index *Index) metaHash(path string) string {
 func (index *Index) Load(path string) error {
 	jf, err := os.Open(path)
 	if err != nil {
-		slog.Info("Load index error: ", path, err)
+		slog.Debug("Load index error: ", path, err)
 		return err
 	}
 	defer jf.Close()
@@ -133,10 +133,10 @@ func (index *Index) Load(path string) error {
 
 func (index *Index) downloadRemote(remote string, path string) error {
 	c := NewCOS(index.config.COS)
-	slog.Info("Download remote index :", remote, path)
+	slog.Debug("Download remote index :", remote, path)
 	err := c.DownloadFile(remote, path)
 	if err != nil {
-		slog.Info("Download index error:", err)
+		slog.Debug("Download index error:", err)
 	}
 	return err
 }
@@ -156,7 +156,7 @@ func (index *Index) UploadRemote() {
 	slog.Info("Uploading index")
 	w, err := os.CreateTemp(index.config.WorkingDir, index.config.Index+".*.new")
 	if err != nil {
-		slog.Error("Write index error:", err)
+		Fatal("Write index error:", err)
 	}
 	defer w.Close()
 	jh := codec.JsonHandle{Indent: 2}
@@ -165,14 +165,14 @@ func (index *Index) UploadRemote() {
 	var enc *codec.Encoder = codec.NewEncoder(w, &jh)
 	err = enc.Encode(index)
 	if err != nil {
-		slog.Error("Encode index json error:", err)
+		Fatal("Encode index json error:", err)
 	}
 	tmpfp := w.Name()
 
 	lh := index.metaHash(tmpfp)
 	latestIndex, err := index.getLatestIndex()
 	if err != nil {
-		slog.Info("Not found remote index.")
+		slog.Debug("Not found remote index.")
 	}
 	rh := index.getRemoteHash(latestIndex)
 	if lh != rh {
@@ -183,7 +183,7 @@ func (index *Index) UploadRemote() {
 		slog.Info("Upload index to :", newName)
 		err := c.UploadFile(newName, tmpfp, "STANDARD", hh)
 		if err != nil {
-			slog.Error("Upload index fail", "error", err)
+			Fatal("Upload index fail", "error", err)
 		}
 	} else {
 		slog.Info("Hash matched, old index is good enough")
@@ -191,7 +191,7 @@ func (index *Index) UploadRemote() {
 	fp := path.Join(index.config.WorkingDir, index.config.Index)
 	err = os.Rename(tmpfp, fp)
 	if err != nil {
-		slog.Error("Index rename error: ", err)
+		Fatal("Index rename error: ", err)
 	}
 }
 
@@ -274,11 +274,11 @@ func (index *Index) DeleteOutdatedChunks() {
 				}
 			}
 			if lmt > t {
-				slog.Info("Fix time for ", fp, " from ", t, " to ", lmt)
+				slog.Debug("Fix time for ", fp, " from ", t, " to ", lmt)
 				index.DeletedChunks[fp] = lmt
 			}
 			if now > lmt {
-				slog.Info("Deleting remote chunk: ", fp)
+				slog.Debug("Deleting remote chunk: ", fp)
 				err := c.DeleteFile(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
 				if err != nil {
 					continue
@@ -302,7 +302,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 		}
 		fi, err := de.Info()
 		if err != nil {
-			slog.Info("Can't stat dir:", path)
+			slog.Debug("Can't stat dir:", path)
 			return nil
 		}
 		d := DirInfo{
@@ -322,7 +322,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 	if de.Type().IsRegular() {
 		fi, err := de.Info()
 		if err != nil {
-			slog.Info("Can't stat file:", path)
+			slog.Debug("Can't stat file:", path)
 			return nil
 		}
 		f := FileInfo{
@@ -333,7 +333,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 		index.Entries.Files[path] = &f
 		return nil
 	}
-	slog.Info("Skip non-regular file: ", path)
+	slog.Debug("Skip non-regular file: ", path)
 	return nil
 }
 
@@ -341,7 +341,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 func (index *Index) GenerateLocal(remoteIndex *Index) {
 	slog.Info("Generating local index")
 	for _, filePath := range index.config.FilePaths {
-		slog.Info("Walk ", filePath)
+		slog.Debug("Walk ", filePath)
 
 		err := filepath.WalkDir(path.Join(index.config.BasePath, filePath), func(path string, de fs.DirEntry, err error) error {
 			if err != nil {

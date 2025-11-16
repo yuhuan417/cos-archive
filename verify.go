@@ -9,27 +9,27 @@ import (
 )
 
 func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, chunks ChunksMap, unmatchedFiles *[]string) error {
-	// slog.Info("Verifying: ", path)
+	// slog.Debug("Verifying: ", path)
 	if de.IsDir() {
 		for _, skip := range config.SkipList {
 			if de.Name() == skip {
-				// slog.Info("In skiplist: ", skip, " Skip: ", path)
+				// slog.Debug("In skiplist: ", skip, " Skip: ", path)
 				return filepath.SkipDir
 			}
 		}
 		fi, err := de.Info()
 		if err != nil {
-			slog.Info("Can't stat file:", path)
+			slog.Debug("Can't stat file:", path)
 			return err
 		}
 		d := DirInfo{
 			Mode: fi.Mode().Perm(),
 		}
 		if fi, ok := index.Entries.Dirs[path]; !ok {
-			slog.Info("Missing meta(dir): ", path)
+			slog.Debug("Missing meta(dir): ", path)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		} else if d != *fi {
-			slog.Info("Unmatched meta(dir): ", path, d, fi)
+			slog.Debug("Unmatched meta(dir): ", path, d, fi)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		}
 		return nil
@@ -40,10 +40,10 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 			LinkTo: link,
 		}
 		if fi, ok := index.Entries.Links[path]; !ok {
-			slog.Info("Missing meta(link): ", path)
+			slog.Debug("Missing meta(link): ", path)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		} else if l != *fi {
-			slog.Info("Unmatched meta(link): ", path, l, fi)
+			slog.Debug("Unmatched meta(link): ", path, l, fi)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		}
 		return nil
@@ -51,7 +51,7 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 	if de.Type().IsRegular() {
 		fi, err := de.Info()
 		if err != nil {
-			slog.Info("Can't stat file:", path)
+			slog.Debug("Can't stat file:", path)
 			return err
 		}
 		f := FileInfo{
@@ -61,21 +61,21 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 		}
 
 		f.Hash = chunkHash(path, f.Size)
-		// slog.Info("Calculate hash: ", path, f.Hash)
+		// slog.Debug("Calculate hash: ", path, f.Hash)
 		if _, ok := chunks[ChunkKey{f.Size, f.Hash}]; !ok {
-			slog.Info("Missing chunk: ", path, f.Size, f.Hash)
+			slog.Debug("Missing chunk: ", path, f.Size, f.Hash)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		}
 		if fi, ok := index.Entries.Files[path]; !ok {
-			slog.Info("Missing meta: ", path)
+			slog.Debug("Missing meta: ", path)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		} else if f != *fi {
-			slog.Info("Unmatched meta: ", path, f, fi)
+			slog.Debug("Unmatched meta: ", path, f, fi)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 		}
 		return nil
 	}
-	slog.Info("Skip non-regular file: ", path)
+	slog.Debug("Skip non-regular file: ", path)
 	return nil
 }
 
@@ -83,7 +83,7 @@ func verifyFiles(config Config) {
 	ri := NewIndex(config)
 	err := ri.LoadRemote()
 	if err != nil {
-		slog.Error("Can't download remote index")
+		Fatal("Can't download remote index")
 		return
 	}
 
@@ -92,7 +92,7 @@ func verifyFiles(config Config) {
 	uf := []string{}
 
 	for _, filePath := range config.FilePaths {
-		slog.Info("Walk ", filePath)
+		slog.Debug("Walk ", filePath)
 		err := filepath.WalkDir(path.Join(config.BasePath, filePath), func(p string, de fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -105,7 +105,7 @@ func verifyFiles(config Config) {
 		}
 	}
 	if len(uf) > 0 {
-		slog.Error("Verify failed: ", uf)
+		Fatal("Verify failed: ", uf)
 	}
-	slog.Info("Verified!")
+	slog.Debug("Verified!")
 }

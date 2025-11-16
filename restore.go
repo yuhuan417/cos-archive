@@ -14,7 +14,7 @@ func logRestoreStatus(err error) {
 	}
 	if cos.IsNotFoundError(err) {
 		// WARN
-		slog.Info("WARN: Resource is not existed")
+		slog.Debug("WARN: Resource is not existed")
 	} else if e, ok := cos.IsCOSError(err); ok {
 		if e.Code == "RestoreAlreadyInProgress" {
 			return
@@ -31,7 +31,7 @@ func logRestoreStatus(err error) {
 }
 
 func restoreChunk(config Config, cm ChunksMap) {
-	slog.Info("Restoring chunks")
+	slog.Debug("Restoring chunks")
 	// Download chunk from map
 	rl := ratelimit.New(90) // per second, hardcode.
 	c := NewCOS(config.COS)

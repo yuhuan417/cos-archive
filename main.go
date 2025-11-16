@@ -11,7 +11,11 @@ import (
 func main() {
 	action := flag.String("action", "backup", "a string")
 	configPath := flag.String("config", "config.json", "a string")
+	verbose := flag.Bool("verbose", false, "enable verbose output")
 	flag.Parse()
+
+	// 初始化日志系统
+	InitLogger(*verbose)
 
 	config := getConfig(*configPath)
 
@@ -23,7 +27,7 @@ func main() {
 
 	lockFile, err := singleinstance.CreateLockFile(path.Join(config.WorkingDir, "pid.lock"))
 	if err != nil {
-		slog.Error("An instance already exists")
+		Fatal("An instance already exists")
 	}
 	defer lockFile.Close()
 
@@ -46,4 +50,7 @@ func main() {
 		slog.Info("Action: verify")
 		verifyFiles(config)
 	}
+	
+	// 在程序结束时输出调试信息（非 verbose 模式）
+	PrintDebugDetails()
 }

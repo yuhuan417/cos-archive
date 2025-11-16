@@ -21,19 +21,19 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 
 	header := c.GetHeader(rp)
 	if header != nil {
-		slog.Info("File already exists", "ctx", ctx, "rp", rp)
+		slog.Debug("File already exists", "ctx", ctx, "rp", rp)
 		return
 	}
 
 	err := c.UploadFile(rp, ctx.localPath, config.COS.Class, nil)
 	if err != nil {
 		if os.IsNotExist(err) {
-			slog.Info("Local file not exist", "ctx", ctx, "error", err)
+			slog.Debug("Local file not exist", "ctx", ctx, "error", err)
 		} else {
-			slog.Error("Upload file error", "ctx", ctx, "error", err)
+			Fatal("Upload file error:", ctx, err)
 		}
 	}
-	slog.Info("Uploaded", "localPath", ctx.localPath)
+	slog.Debug("Uploaded", "localPath", ctx.localPath)
 }
 
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
@@ -105,7 +105,7 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	slog.Info("Total chunk size", "size", humanize.IBytes(uint64(totalSize)))
 	for k, v := range remoteChunkMap {
 		if !v {
-			slog.Info("Marking delete chunk", "path", chunkPath(k))
+			slog.Debug("Marking delete chunk", "path", chunkPath(k))
 			localIndex.DeletedChunks[k] = deleteTime
 		}
 	}

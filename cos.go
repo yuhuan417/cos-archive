@@ -34,7 +34,7 @@ func NewCOS(config COSConfig) *COS {
 func (c *COS) DownloadFile(remote string, local string) error {
 	_, err := c.c.Object.GetToFile(context.Background(), remote, local, nil)
 	if err != nil {
-		slog.Info("Download file error:", remote, local)
+		slog.Debug("Download file error:", remote, local)
 	}
 	return err
 }
@@ -91,7 +91,7 @@ func (c *COS) ScanFiles(prefix string, cb func(cos.Object)) {
 	for {
 		v, _, err := c.c.Bucket.Get(context.Background(), opt)
 		if err != nil {
-			slog.Error("Scan error:", err)
+			Fatal("Scan error:", err)
 		}
 		for _, c := range v.Contents {
 			cb(c)
