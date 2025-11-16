@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
@@ -212,6 +212,6 @@ func browseFiles(config Config) {
 	}
 
 	http.Handle("/", browseHandler(config, index.Entries, dm))
-	log.Println("Server started at port ", config.Port)
-	log.Fatal(http.ListenAndServe(":"+config.Port, nil))
+	slog.Info("Server started", "port", config.Port)
+	slog.Error("Server error", "error", http.ListenAndServe(":"+config.Port, nil))
 }

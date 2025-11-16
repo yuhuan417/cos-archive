@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"log/slog"
 	"path"
 
 	"github.com/allan-simon/go-singleinstance"
@@ -16,34 +16,34 @@ func main() {
 	config := getConfig(*configPath)
 
 	if *action == "browse" {
-		log.Println("Action browse")
+		slog.Info("Action browse")
 		browseFiles(config)
 		return
 	}
 
 	lockFile, err := singleinstance.CreateLockFile(path.Join(config.WorkingDir, "pid.lock"))
 	if err != nil {
-		log.Fatalln("An instance already exists")
+		slog.Error("An instance already exists")
 	}
 	defer lockFile.Close()
 
 	if *action == "restore" {
-		log.Println("Action: restore")
+		slog.Info("Action: restore")
 		restoreFiles(config)
 	} else if *action == "download" {
-		log.Println("Action: download")
+		slog.Info("Action: download")
 		downloadFiles(config)
 	} else if *action == "link" {
-		log.Println("Action: link")
+		slog.Info("Action: link")
 		linkFiles(config)
 	} else if *action == "backup" {
-		log.Println("Action: backup")
+		slog.Info("Action: backup")
 		backupFiles(config)
 	} else if *action == "fsck" {
-		log.Println("Action: fsck")
+		slog.Info("Action: fsck")
 		fsckRemote(config)
 	} else if *action == "verify" {
-		log.Println("Action: verify")
+		slog.Info("Action: verify")
 		verifyFiles(config)
 	}
 }

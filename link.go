@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"path"
 	"time"
@@ -9,14 +9,14 @@ import (
 
 func linkFiles(config Config) {
 	if config.TargetDir == "" {
-		log.Fatalln("Empty target dir!")
+		slog.Error("Empty target dir!")
 	}
 	// index path
 	riPath := path.Join(config.TargetDir, config.Index+".remote")
 	ri := NewIndex(config)
 	err := ri.Load(riPath)
 	if err != nil {
-		log.Fatalln("Can't load index")
+		slog.Error("Can't load index")
 
 	}
 
@@ -29,7 +29,7 @@ func linkFiles(config Config) {
 		targetPath := path.Join(linkPath, fp)
 		err := os.MkdirAll(targetPath, fi.Mode)
 		if err != nil {
-			log.Fatal("MkdirAll error:", targetPath, err)
+			slog.Error("MkdirAll error:", targetPath, err)
 		}
 	}
 
@@ -37,7 +37,7 @@ func linkFiles(config Config) {
 		targetPath := path.Join(linkPath, fp)
 		err := os.Symlink(fi.LinkTo, targetPath)
 		if err != nil {
-			log.Fatal("Symlink error:", targetPath, fi.LinkTo, err)
+			slog.Error("Symlink error:", targetPath, fi.LinkTo, err)
 		}
 		continue
 	}
@@ -48,18 +48,18 @@ func linkFiles(config Config) {
 		lp := path.Join(chunksPath, k[len(k)-2:], k)
 		err := os.Link(lp, targetPath)
 		if err != nil {
-			log.Fatal("Link error:", targetPath, lp, err)
+			slog.Error("Link error:", targetPath, lp, err)
 		}
 		err = os.Chmod(targetPath, fi.Mode)
 		if err != nil {
-			log.Fatal("Chmod error:", targetPath, err)
+			slog.Error("Chmod error:", targetPath, err)
 		}
 		now := time.Now()
 		mtime := time.Unix(fi.ModTime, 0)
 
 		err = os.Chtimes(targetPath, now, mtime)
 		if err != nil {
-			log.Fatal("Chmod error:", targetPath, err)
+			slog.Error("Chmod error:", targetPath, err)
 		}
 	}
 }

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"path"
 
 	"github.com/tencentyun/cos-go-sdk-v5"
@@ -14,24 +14,24 @@ func logRestoreStatus(err error) {
 	}
 	if cos.IsNotFoundError(err) {
 		// WARN
-		log.Println("WARN: Resource is not existed")
+		slog.Info("WARN: Resource is not existed")
 	} else if e, ok := cos.IsCOSError(err); ok {
 		if e.Code == "RestoreAlreadyInProgress" {
 			return
 		}
-		log.Printf("ERROR: Code: %v\n", e.Code)
-		log.Printf("ERROR: Message: %v\n", e.Message)
-		log.Printf("ERROR: Resource: %v\n", e.Resource)
-		log.Printf("ERROR: RequestId: %v\n", e.RequestID)
+		slog.Info("ERROR: Code: %v\n", e.Code)
+		slog.Info("ERROR: Message: %v\n", e.Message)
+		slog.Info("ERROR: Resource: %v\n", e.Resource)
+		slog.Info("ERROR: RequestId: %v\n", e.RequestID)
 		// ERROR
 	} else {
-		log.Printf("ERROR: %v\n", err)
+		slog.Info("ERROR: %v\n", err)
 		// ERROR
 	}
 }
 
 func restoreChunk(config Config, cm ChunksMap) {
-	log.Println("Restoring chunks")
+	slog.Info("Restoring chunks")
 	// Download chunk from map
 	rl := ratelimit.New(90) // per second, hardcode.
 	c := NewCOS(config.COS)

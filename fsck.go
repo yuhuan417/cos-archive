@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -10,7 +10,7 @@ func fsckRemote(config Config) {
 	err := ri.LoadRemote()
 
 	if err != nil {
-		log.Fatalln("Can't load remote index: ", err)
+		slog.Error("Can't load remote index", "error", err)
 	}
 
 	ri.DeleteOutdatedChunks()
@@ -24,7 +24,7 @@ func fsckRemote(config Config) {
 			cm[ch] = true
 		} else {
 			delete(ri.Entries.Files, fp)
-			log.Println("Chunk lost:", fp, chunkPath(ch))
+			slog.Info("Chunk lost", "fp", fp, "path", chunkPath(ch))
 		}
 	}
 	now := time.Now().Unix()
@@ -35,7 +35,7 @@ func fsckRemote(config Config) {
 		} else {
 			delete(ri.DeletedChunks, k)
 			if t < now {
-				log.Println("Deleted chunk lost:", chunkPath(k))
+				slog.Info("Deleted chunk lost", "path", chunkPath(k))
 			}
 		}
 	}
@@ -43,7 +43,7 @@ func fsckRemote(config Config) {
 	forever := time.Now().AddDate(10, 0, 0).Unix()
 	for k, v := range cm {
 		if !v {
-			log.Println("Lost found chunk", k)
+			slog.Info("Lost found chunk", "chunk", k)
 			ri.DeletedChunks[k] = forever
 		}
 	}

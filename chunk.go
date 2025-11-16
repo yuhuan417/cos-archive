@@ -5,7 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -63,7 +63,7 @@ func buildChunksMap(index Index) ChunksMap {
 }
 
 func scanRemoteChunksMap(config Config) ChunksMap {
-	log.Println("Scan remote chunks")
+	slog.Info("Scan remote chunks")
 	cm := make(ChunksMap)
 	c := NewCOS(config.COS)
 	c.ScanFiles(config.COS.ChunkPrefix, func(obj cos.Object) {

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -112,7 +112,7 @@ func (index *Index) metaHash(path string) string {
 func (index *Index) Load(path string) error {
 	jf, err := os.Open(path)
 	if err != nil {
-		log.Println("Load index error: ", path, err)
+		slog.Info("Load index error: ", path, err)
 		return err
 	}
 	defer jf.Close()
@@ -124,7 +124,7 @@ func (index *Index) Load(path string) error {
 	err = dec.Decode(index)
 
 	if err != nil {
-		log.Println("Load index error: ", path, err)
+		slog.Info("Load index error: ", path, err)
 		return err
 	}
 
@@ -133,10 +133,10 @@ func (index *Index) Load(path string) error {
 
 func (index *Index) downloadRemote(remote string, path string) error {
 	c := NewCOS(index.config.COS)
-	log.Println("Download remote index :", remote, path)
+	slog.Info("Download remote index :", remote, path)
 	err := c.DownloadFile(remote, path)
 	if err != nil {
-		log.Println("Download index error:", err)
+		slog.Info("Download index error:", err)
 	}
 	return err
 }
@@ -153,10 +153,10 @@ func (index *Index) getRemoteHash(p string) string {
 
 // UploadRemote ...
 func (index *Index) UploadRemote() {
-	log.Println("Uploading index")
+	slog.Info("Uploading index")
 	w, err := os.CreateTemp(index.config.WorkingDir, index.config.Index+".*.new")
 	if err != nil {
-		log.Fatal("Write index error:", err)
+		slog.Error("Write index error:", err)
 	}
 	defer w.Close()
 	jh := codec.JsonHandle{Indent: 2}
@@ -165,14 +165,14 @@ func (index *Index) UploadRemote() {
 	var enc *codec.Encoder = codec.NewEncoder(w, &jh)
 	err = enc.Encode(index)
 	if err != nil {
-		log.Fatal("Encode index json error:", err)
+		slog.Error("Encode index json error:", err)
 	}
 	tmpfp := w.Name()
 
 	lh := index.metaHash(tmpfp)
 	latestIndex, err := index.getLatestIndex()
 	if err != nil {
-		log.Println("Not found remote index.")
+		slog.Info("Not found remote index.")
 	}
 	rh := index.getRemoteHash(latestIndex)
 	if lh != rh {
@@ -180,18 +180,18 @@ func (index *Index) UploadRemote() {
 		hh.Add("x-cos-meta-hash", lh)
 		c := NewCOS(index.config.COS)
 		newName := index.config.Index + "." + strconv.FormatInt(time.Now().Unix(), 10)
-		log.Println("Upload index to :", newName)
+		slog.Info("Upload index to :", newName)
 		err := c.UploadFile(newName, tmpfp, "STANDARD", hh)
 		if err != nil {
-			log.Fatalln("Upload index fail:", err)
+			slog.Error("Upload index fail", "error", err)
 		}
 	} else {
-		log.Println("Hash matched, old index is good enough")
+		slog.Info("Hash matched, old index is good enough")
 	}
 	fp := path.Join(index.config.WorkingDir, index.config.Index)
 	err = os.Rename(tmpfp, fp)
 	if err != nil {
-		log.Fatal("Index rename error: ", err)
+		slog.Error("Index rename error: ", err)
 	}
 }
 
@@ -219,7 +219,7 @@ func (index *Index) getLatestIndex() (string, error) {
 	err = nil
 	if len(indexList) > 0 {
 		latestIndex = indexList[0]
-		log.Println("Using latest index: ", latestIndex)
+		slog.Info("Using latest index: ", latestIndex)
 	} else {
 		err = errors.New("NO REMOTE IDEX")
 	}
@@ -228,29 +228,29 @@ func (index *Index) getLatestIndex() (string, error) {
 
 // LoadRemote ...
 func (index *Index) LoadRemote() error {
-	log.Println("Loading remote index")
+	slog.Info("Loading remote index")
 	oldPath := path.Join(index.config.WorkingDir, index.config.Index)
 	mh := index.metaHash(oldPath)
 
 	latestIndex, err := index.getLatestIndex()
 	if err != nil {
-		log.Println("Not found remote index.")
+		slog.Info("Not found remote index.")
 	}
 
 	rh := index.getRemoteHash(latestIndex)
 	riPath := ""
 
 	if mh == rh {
-		log.Println("Hash match, using local old index.")
+		slog.Info("Hash match, using local old index.")
 		riPath = oldPath
 	} else {
 		riPath = path.Join(index.config.WorkingDir, index.config.Index+".remote")
 		os.Remove(riPath)
 		err := index.downloadRemote(latestIndex, riPath)
 		if err != nil {
-			log.Println("Can't download remote index", err)
+			slog.Info("Can't download remote index", err)
 		}
-		log.Println("Download remote index to: ", riPath)
+		slog.Info("Download remote index to: ", riPath)
 	}
 	return index.Load(riPath)
 }
@@ -274,11 +274,11 @@ func (index *Index) DeleteOutdatedChunks() {
 				}
 			}
 			if lmt > t {
-				log.Println("Fix time for ", fp, " from ", t, " to ", lmt)
+				slog.Info("Fix time for ", fp, " from ", t, " to ", lmt)
 				index.DeletedChunks[fp] = lmt
 			}
 			if now > lmt {
-				log.Println("Deleting remote chunk: ", fp)
+				slog.Info("Deleting remote chunk: ", fp)
 				err := c.DeleteFile(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
 				if err != nil {
 					continue
@@ -288,21 +288,21 @@ func (index *Index) DeleteOutdatedChunks() {
 			}
 		}
 	}
-	log.Println("Deleting outdated remote chunk: ", cnt)
+	slog.Info("Deleting outdated remote chunk: ", cnt)
 }
 
 func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
-	// log.Println("Processsing: ", path)
+	// slog.Info("Processsing: ", path)
 	if de.IsDir() {
 		for _, skip := range index.config.SkipList {
 			if de.Name() == skip {
-				// log.Println("In skiplist: ", skip, " Skip: ", path)
+				// slog.Info("In skiplist: ", skip, " Skip: ", path)
 				return filepath.SkipDir
 			}
 		}
 		fi, err := de.Info()
 		if err != nil {
-			log.Println("Can't stat dir:", path)
+			slog.Info("Can't stat dir:", path)
 			return nil
 		}
 		d := DirInfo{
@@ -322,7 +322,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 	if de.Type().IsRegular() {
 		fi, err := de.Info()
 		if err != nil {
-			log.Println("Can't stat file:", path)
+			slog.Info("Can't stat file:", path)
 			return nil
 		}
 		f := FileInfo{
@@ -333,15 +333,15 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 		index.Entries.Files[path] = &f
 		return nil
 	}
-	log.Println("Skip non-regular file: ", path)
+	slog.Info("Skip non-regular file: ", path)
 	return nil
 }
 
 // GenerateLocal ...
 func (index *Index) GenerateLocal(remoteIndex *Index) {
-	log.Println("Generating local index")
+	slog.Info("Generating local index")
 	for _, filePath := range index.config.FilePaths {
-		log.Println("Walk ", filePath)
+		slog.Info("Walk ", filePath)
 
 		err := filepath.WalkDir(path.Join(index.config.BasePath, filePath), func(path string, de fs.DirEntry, err error) error {
 			if err != nil {
@@ -361,12 +361,12 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime {
 				h = remoteFileInfo.Hash
 				cachedHash = true
-				// log.Println("Use cached hash ", h, " for ", fp)
+				// slog.Info("Use cached hash ", h, " for ", fp)
 			}
 		}
 		if !cachedHash {
 			h = chunkHash(fp, fi.Size)
-			// log.Println("Caculated hash ", h, " for ", fp)
+			// slog.Info("Caculated hash ", h, " for ", fp)
 		}
 		fi.Hash = h
 	}

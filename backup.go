@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"path"
 	"sync"
@@ -21,19 +21,19 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 
 	header := c.GetHeader(rp)
 	if header != nil {
-		log.Println("File already exists:", ctx, rp)
+		slog.Info("File already exists", "ctx", ctx, "rp", rp)
 		return
 	}
 
 	err := c.UploadFile(rp, ctx.localPath, config.COS.Class, nil)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Println("Local file not exist:", ctx, err)
+			slog.Info("Local file not exist", "ctx", ctx, "error", err)
 		} else {
-			log.Fatalln("Upload file error:", ctx, err)
+			slog.Error("Upload file error", "ctx", ctx, "error", err)
 		}
 	}
-	log.Println("Uploaded:", ctx.localPath)
+	slog.Info("Uploaded", "localPath", ctx.localPath)
 }
 
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
@@ -101,11 +101,11 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 	close(ch)
 	wg.Wait()
 
-	log.Println("Uploaded ", cnt, " files, ", humanize.IBytes(uint64(uploadSize)))
-	log.Println("Total chunk size: ", humanize.IBytes(uint64(totalSize)))
+	slog.Info("Uploaded files", "count", cnt, "size", humanize.IBytes(uint64(uploadSize)))
+	slog.Info("Total chunk size", "size", humanize.IBytes(uint64(totalSize)))
 	for k, v := range remoteChunkMap {
 		if !v {
-			log.Println("Marking delete chunk:", chunkPath(k))
+			slog.Info("Marking delete chunk", "path", chunkPath(k))
 			localIndex.DeletedChunks[k] = deleteTime
 		}
 	}

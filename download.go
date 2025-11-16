@@ -1,13 +1,13 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"path"
 )
 
 func downloadChunk(config Config, cm ChunksMap) {
-	log.Println("Downloading chunks")
+	slog.Info("Downloading chunks")
 	// Download chunk from map
 	c := NewCOS(config.COS)
 	for key := range cm {
@@ -15,25 +15,25 @@ func downloadChunk(config Config, cm ChunksMap) {
 		cp := path.Join(config.TargetDir, "chunks", k[len(k)-2:])
 		err := os.MkdirAll(cp, 0755)
 		if err != nil {
-			log.Println("Can't create chunks directory: ", cp)
+			slog.Info("Can't create chunks directory", "path", cp)
 		}
 		p := path.Join(config.COS.ChunkPrefix, k)
 		lp := path.Join(cp, k)
 		for {
-			log.Println("Downloading:", p)
+			slog.Info("Downloading", "path", p)
 			if fi, err := os.Stat(lp); err == nil {
 				size := fi.Size()
 				h := chunkHash(lp, size)
 				ck := ChunkKey{size, h}
 
 				if ck == key {
-					log.Println("File exists. Hash matches. Good, skip.")
+					slog.Info("File exists. Hash matches. Good, skip.")
 					break
 				}
 			}
 			err = c.DownloadFile(p, lp)
 			if err != nil {
-				log.Println("Download file error:", p, err)
+				slog.Info("Download file error", "path", p, "error", err)
 			} else {
 				break
 			}
@@ -43,12 +43,12 @@ func downloadChunk(config Config, cm ChunksMap) {
 
 func downloadFiles(config Config) {
 	if config.TargetDir == "" {
-		log.Fatalln("Empty target dir.")
+		slog.Error("Empty target dir.")
 	}
 	index := NewIndex(config)
 	err := index.LoadRemote()
 	if err != nil {
-		log.Fatalln("Can't download index")
+		slog.Error("Can't download index")
 	}
 	cm := scanRemoteChunksMap(config)
 	downloadChunk(config, cm)
