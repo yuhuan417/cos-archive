@@ -73,9 +73,9 @@ func InitLogger(verbose bool) {
 			infoHandler: &SimpleHandler{
 				writer: os.Stdout,
 			},
-			debugHandler: slog.NewTextHandler(debugCollector, &slog.HandlerOptions{
-				Level: slog.LevelDebug,
-			}),
+			debugHandler: &SimpleHandler{
+				writer: debugCollector,
+			},
 		})
 	}
 	
@@ -97,12 +97,16 @@ func Fatal(args ...interface{}) {
 			slog.Error(strings.Join(strArgs, " "))
 		}
 	}
+	// 在退出前打印调试信息
+	PrintDebugDetails()
 	os.Exit(1)
 }
 
 // Fatalf 记录格式化错误消息并退出程序，替代 log.Fatalf 的行为
 func Fatalf(format string, args ...interface{}) {
 	slog.Error(fmt.Sprintf(format, args...))
+	// 在退出前打印调试信息
+	PrintDebugDetails()
 	os.Exit(1)
 }
 
@@ -111,18 +115,8 @@ func PrintDebugDetails() {
 	if !verboseMode && debugCollector.HasContent() {
 		fmt.Println("\n=== Debug Details ===")
 		content := debugCollector.GetContent()
-		// 清理每行的前导时间戳和级别信息，使输出更简洁
-		lines := strings.Split(content, "\n")
-		for _, line := range lines {
-			if line != "" {
-				// 移除时间戳和级别信息，只保留消息内容
-				if idx := strings.Index(line, "msg="); idx != -1 {
-					fmt.Println("[DEBUG]" + line[idx:])
-				} else {
-					fmt.Println("[DEBUG]" + line)
-				}
-			}
-		}
+		// 直接输出收集到的 DEBUG 日志，因为 SimpleHandler 已经使用了简洁格式
+		fmt.Print(content)
 	}
 }
 
@@ -187,7 +181,7 @@ type CustomHandler struct {
 
 // Enabled 实现 slog.Handler 接口
 func (h *CustomHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return level >= slog.LevelInfo
+	return true // 允许所有级别的日志进入 Handle 方法进行分发
 }
 
 // Handle 实现 slog.Handler 接口
