@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -62,16 +63,16 @@ func InitLogger(verbose bool) {
 	debugCollector = NewDebugCollector()
 
 	if verbose {
-		// Verbose 模式：直接输出所有日志
-		defaultLogger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelDebug,
-		}))
+		// Verbose 模式：直接输出所有日志，使用简洁格式
+		defaultLogger = slog.New(&SimpleHandler{
+			writer: os.Stdout,
+		})
 	} else {
-		// 默认模式：创建自定义 handler
+		// 默认模式：创建自定义 handler，使用简洁格式
 		defaultLogger = slog.New(&CustomHandler{
-			infoHandler: slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-				Level: slog.LevelInfo,
-			}),
+			infoHandler: &SimpleHandler{
+				writer: os.Stdout,
+			},
 			debugHandler: slog.NewTextHandler(debugCollector, &slog.HandlerOptions{
 				Level: slog.LevelDebug,
 			}),
@@ -123,6 +124,59 @@ func PrintDebugDetails() {
 			}
 		}
 	}
+}
+
+// SimpleHandler 简洁的日志处理器，输出格式：level=msg
+type SimpleHandler struct {
+	writer io.Writer
+}
+
+// Enabled 实现 slog.Handler 接口
+func (h *SimpleHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= slog.LevelDebug
+}
+
+// Handle 实现 slog.Handler 接口，简化输出格式
+func (h *SimpleHandler) Handle(ctx context.Context, r slog.Record) error {
+	var level string
+	switch r.Level {
+	case slog.LevelDebug:
+		level = "D"
+	case slog.LevelInfo:
+		level = "I"
+	case slog.LevelWarn:
+		level = "W"
+	case slog.LevelError:
+		level = "E"
+	default:
+		level = "?"
+	}
+	
+	// 获取简短时间格式 (HH:MM:SS)
+	t := r.Time
+	timeStr := t.Format("15:04:05")
+	
+	// 输出格式：HH:MM:SS L msg
+	fmt.Fprintf(h.writer, "%s %s %s", timeStr, level, r.Message)
+	
+	// 添加键值对
+	r.Attrs(func(a slog.Attr) bool {
+		fmt.Fprintf(h.writer, " %s=%v", a.Key, a.Value)
+		return true
+	})
+	
+	fmt.Fprintln(h.writer)
+	return nil
+}
+
+// WithAttrs 实现 slog.Handler 接口
+func (h *SimpleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return h // 简化实现，不处理属性
+}
+
+// WithGroup 实现 slog.Handler 接口
+func (h *SimpleHandler) WithGroup(name string) slog.Handler {
+	return h // 简化实现，不处理分组
 }
 
 // CustomHandler 自定义日志处理器
