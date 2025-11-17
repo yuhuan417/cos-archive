@@ -9,7 +9,7 @@ import (
 
 func linkFiles(config Config) {
 	if config.TargetDir == "" {
-		slog.Debug("Empty target dir!")
+		slog.Debug("Empty target dir")
 	}
 	// index path
 	riPath := path.Join(config.TargetDir, config.Index+".remote")

@@ -21,19 +21,19 @@ func uploadPayload(c *COS, config Config, ctx UploadCTX) {
 
 	header := c.GetHeader(rp)
 	if header != nil {
-		slog.Debug("File already exists", "ctx", ctx, "rp", rp)
+		slog.Debug("File already exists", "ctx", ctx, "remotePath", rp)
 		return
 	}
 
 	err := c.UploadFile(rp, ctx.localPath, config.COS.Class, nil)
 	if err != nil {
 		if os.IsNotExist(err) {
-			slog.Debug("Local file not exist", "ctx", ctx, "error", err)
+			slog.Debug("Local file does not exist", "ctx", ctx, "error", err)
 		} else {
 			Fatal("Upload file error:", ctx, err)
 		}
 	}
-	slog.Debug("Uploaded", "localPath", ctx.localPath)
+	slog.Debug("Uploaded file", "localPath", ctx.localPath)
 }
 
 func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {

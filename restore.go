@@ -14,18 +14,18 @@ func logRestoreStatus(err error) {
 	}
 	if cos.IsNotFoundError(err) {
 		// WARN
-		slog.Debug("WARN: Resource is not existed")
+		slog.Debug("WARN: Resource does not exist")
 	} else if e, ok := cos.IsCOSError(err); ok {
 		if e.Code == "RestoreAlreadyInProgress" {
 			return
 		}
-		slog.Info("ERROR: Code: %v\n", e.Code)
-		slog.Info("ERROR: Message: %v\n", e.Message)
-		slog.Info("ERROR: Resource: %v\n", e.Resource)
-		slog.Info("ERROR: RequestId: %v\n", e.RequestID)
+		slog.Info("ERROR", "code", e.Code)
+		slog.Info("ERROR", "message", e.Message)
+		slog.Info("ERROR", "resource", e.Resource)
+		slog.Info("ERROR", "requestId", e.RequestID)
 		// ERROR
 	} else {
-		slog.Info("ERROR: %v\n", err)
+		slog.Info("ERROR", "error", err)
 		// ERROR
 	}
 }

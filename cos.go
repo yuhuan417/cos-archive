@@ -34,7 +34,7 @@ func NewCOS(config COSConfig) *COS {
 func (c *COS) DownloadFile(remote string, local string) error {
 	_, err := c.c.Object.GetToFile(context.Background(), remote, local, nil)
 	if err != nil {
-		slog.Debug("Download file error:", remote, local)
+		slog.Debug("Download file error", "remote", remote, "local", local)
 	}
 	return err
 }

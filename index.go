@@ -112,7 +112,7 @@ func (index *Index) metaHash(path string) string {
 func (index *Index) Load(path string) error {
 	jf, err := os.Open(path)
 	if err != nil {
-		slog.Debug("Load index error: ", path, err)
+		slog.Debug("Load index error", "path", path, "error", err)
 		return err
 	}
 	defer jf.Close()
@@ -124,7 +124,7 @@ func (index *Index) Load(path string) error {
 	err = dec.Decode(index)
 
 	if err != nil {
-		slog.Info("Load index error: ", path, err)
+		slog.Info("Load index error", "path", path, "error", err)
 		return err
 	}
 
@@ -133,10 +133,10 @@ func (index *Index) Load(path string) error {
 
 func (index *Index) downloadRemote(remote string, path string) error {
 	c := NewCOS(index.config.COS)
-	slog.Debug("Download remote index :", remote, path)
+	slog.Debug("Download remote index", "remote", remote, "path", path)
 	err := c.DownloadFile(remote, path)
 	if err != nil {
-		slog.Debug("Download index error:", err)
+		slog.Debug("Download index error", "error", err)
 	}
 	return err
 }
@@ -180,7 +180,7 @@ func (index *Index) UploadRemote() {
 		hh.Add("x-cos-meta-hash", lh)
 		c := NewCOS(index.config.COS)
 		newName := index.config.Index + "." + strconv.FormatInt(time.Now().Unix(), 10)
-		slog.Info("Upload index to :", newName)
+		slog.Info("Upload index to", "name", newName)
 		err := c.UploadFile(newName, tmpfp, "STANDARD", hh)
 		if err != nil {
 			Fatal("Upload index fail", "error", err)
@@ -219,7 +219,7 @@ func (index *Index) getLatestIndex() (string, error) {
 	err = nil
 	if len(indexList) > 0 {
 		latestIndex = indexList[0]
-		slog.Info("Using latest index: ", latestIndex)
+		slog.Info("Using latest index", "index", latestIndex)
 	} else {
 		err = errors.New("NO REMOTE IDEX")
 	}
@@ -250,7 +250,7 @@ func (index *Index) LoadRemote() error {
 		if err != nil {
 			slog.Info("Can't download remote index", err)
 		}
-		slog.Info("Download remote index to: ", riPath)
+		slog.Info("Download remote index to", "path", riPath)
 	}
 	return index.Load(riPath)
 }
@@ -278,7 +278,7 @@ func (index *Index) DeleteOutdatedChunks() {
 				index.DeletedChunks[fp] = lmt
 			}
 			if now > lmt {
-				slog.Debug("Deleting remote chunk: ", fp)
+				slog.Debug("Deleting remote chunk", "path", fp)
 				err := c.DeleteFile(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
 				if err != nil {
 					continue
@@ -288,7 +288,7 @@ func (index *Index) DeleteOutdatedChunks() {
 			}
 		}
 	}
-	slog.Info("Deleting outdated remote chunk: ", cnt)
+	slog.Info("Deleting outdated remote chunk", "count", cnt)
 }
 
 func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
@@ -302,7 +302,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 		}
 		fi, err := de.Info()
 		if err != nil {
-			slog.Debug("Can't stat dir:", path)
+			slog.Debug("Can't stat dir", "path", path)
 			return nil
 		}
 		d := DirInfo{
@@ -322,7 +322,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 	if de.Type().IsRegular() {
 		fi, err := de.Info()
 		if err != nil {
-			slog.Debug("Can't stat file:", path)
+			slog.Debug("Can't stat file", "path", path)
 			return nil
 		}
 		f := FileInfo{
@@ -333,7 +333,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 		index.Entries.Files[path] = &f
 		return nil
 	}
-	slog.Debug("Skip non-regular file: ", path)
+	slog.Debug("Skip non-regular file", "path", path)
 	return nil
 }
 
