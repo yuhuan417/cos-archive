@@ -19,13 +19,13 @@ func logRestoreStatus(err error) {
 		if e.Code == "RestoreAlreadyInProgress" {
 			return
 		}
-		slog.Info("ERROR", "code", e.Code)
-		slog.Info("ERROR", "message", e.Message)
-		slog.Info("ERROR", "resource", e.Resource)
-		slog.Info("ERROR", "requestId", e.RequestID)
+		slog.Error("ERROR", "code", e.Code)
+		slog.Error("ERROR", "message", e.Message)
+		slog.Error("ERROR", "resource", e.Resource)
+		slog.Error("ERROR", "requestId", e.RequestID)
 		// ERROR
 	} else {
-		slog.Info("ERROR", "error", err)
+		slog.Error("ERROR", "error", err)
 		// ERROR
 	}
 }

@@ -124,7 +124,7 @@ func (index *Index) Load(path string) error {
 	err = dec.Decode(index)
 
 	if err != nil {
-		slog.Info("Load index error", "path", path, "error", err)
+		slog.Debug("Load index error", "path", path, "error", err)
 		return err
 	}
 
@@ -153,7 +153,7 @@ func (index *Index) getRemoteHash(p string) string {
 
 // UploadRemote ...
 func (index *Index) UploadRemote() {
-	slog.Info("Uploading index")
+	slog.Debug("Uploading index")
 	w, err := os.CreateTemp(index.config.WorkingDir, index.config.Index+".*.new")
 	if err != nil {
 		Fatal("Write index error:", err)
@@ -180,13 +180,13 @@ func (index *Index) UploadRemote() {
 		hh.Add("x-cos-meta-hash", lh)
 		c := NewCOS(index.config.COS)
 		newName := index.config.Index + "." + strconv.FormatInt(time.Now().Unix(), 10)
-		slog.Info("Upload index to", "name", newName)
+		slog.Debug("Upload index to", "name", newName)
 		err := c.UploadFile(newName, tmpfp, "STANDARD", hh)
 		if err != nil {
 			Fatal("Upload index fail", "error", err)
 		}
 	} else {
-		slog.Info("Hash matched, old index is good enough")
+		slog.Debug("Hash matched, old index is good enough")
 	}
 	fp := path.Join(index.config.WorkingDir, index.config.Index)
 	err = os.Rename(tmpfp, fp)
@@ -219,7 +219,7 @@ func (index *Index) getLatestIndex() (string, error) {
 	err = nil
 	if len(indexList) > 0 {
 		latestIndex = indexList[0]
-		slog.Info("Using latest index", "index", latestIndex)
+		slog.Debug("Using latest index", "index", latestIndex)
 	} else {
 		err = errors.New("NO REMOTE IDEX")
 	}
@@ -228,29 +228,29 @@ func (index *Index) getLatestIndex() (string, error) {
 
 // LoadRemote ...
 func (index *Index) LoadRemote() error {
-	slog.Info("Loading remote index")
+	slog.Debug("Loading remote index")
 	oldPath := path.Join(index.config.WorkingDir, index.config.Index)
 	mh := index.metaHash(oldPath)
 
 	latestIndex, err := index.getLatestIndex()
 	if err != nil {
-		slog.Info("Not found remote index.")
+		slog.Debug("Not found remote index.")
 	}
 
 	rh := index.getRemoteHash(latestIndex)
 	riPath := ""
 
 	if mh == rh {
-		slog.Info("Hash match, using local old index.")
+		slog.Debug("Hash match, using local old index.")
 		riPath = oldPath
 	} else {
 		riPath = path.Join(index.config.WorkingDir, index.config.Index+".remote")
 		os.Remove(riPath)
 		err := index.downloadRemote(latestIndex, riPath)
 		if err != nil {
-			slog.Info("Can't download remote index", "error", err)
+			slog.Debug("Can't download remote index", "error", err)
 		}
-		slog.Info("Download remote index to", "path", riPath)
+		slog.Debug("Download remote index to", "path", riPath)
 	}
 	return index.Load(riPath)
 }
@@ -339,7 +339,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 
 // GenerateLocal ...
 func (index *Index) GenerateLocal(remoteIndex *Index) {
-	slog.Info("Generating local index")
+	slog.Debug("Generating local index")
 	for _, filePath := range index.config.FilePaths {
 		slog.Debug("Walk", "path", filePath)
 

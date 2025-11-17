@@ -212,6 +212,6 @@ func browseFiles(config Config) {
 	}
 
 	http.Handle("/", browseHandler(config, index.Entries, dm))
-	slog.Info("Server started", "port", config.Port)
+	slog.Debug("Server started", "port", config.Port)
 	Fatal(http.ListenAndServe(":"+config.Port, nil))
 }
