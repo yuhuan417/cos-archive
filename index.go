@@ -248,7 +248,7 @@ func (index *Index) LoadRemote() error {
 		os.Remove(riPath)
 		err := index.downloadRemote(latestIndex, riPath)
 		if err != nil {
-			slog.Info("Can't download remote index", err)
+			slog.Info("Can't download remote index", "error", err)
 		}
 		slog.Info("Download remote index to", "path", riPath)
 	}
@@ -274,7 +274,7 @@ func (index *Index) DeleteOutdatedChunks() {
 				}
 			}
 			if lmt > t {
-				slog.Debug("Fix time for ", fp, " from ", t, " to ", lmt)
+				slog.Debug("Fix time", "path", fp, "from", t, "to", lmt)
 				index.DeletedChunks[fp] = lmt
 			}
 			if now > lmt {
@@ -341,7 +341,7 @@ func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
 func (index *Index) GenerateLocal(remoteIndex *Index) {
 	slog.Info("Generating local index")
 	for _, filePath := range index.config.FilePaths {
-		slog.Debug("Walk ", filePath)
+		slog.Debug("Walk", "path", filePath)
 
 		err := filepath.WalkDir(path.Join(index.config.BasePath, filePath), func(path string, de fs.DirEntry, err error) error {
 			if err != nil {
