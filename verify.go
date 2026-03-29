@@ -60,7 +60,13 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 			Size:    fi.Size(),
 		}
 
-		f.Hash = chunkHash(path, f.Size)
+		var hashErr error
+		f.Hash, hashErr = chunkHash(path, f.Size)
+		if hashErr != nil {
+			slog.Debug("Hash calculation failed", "path", path, "error", hashErr)
+			*unmatchedFiles = append(*unmatchedFiles, path)
+			return nil
+		}
 		// slog.Debug("Calculate hash: ", path, f.Hash)
 		if _, ok := chunks[ChunkKey{f.Size, f.Hash}]; !ok {
 			slog.Debug("Missing chunk", "path", path, "size", f.Size, "hash", f.Hash)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -93,10 +94,13 @@ func parseChunkKeyFromString(s string) ChunkKey {
 	return k
 }
 
-func chunkHash(path string, size int64) HashType {
+func chunkHash(path string, size int64) (HashType, error) {
 	// xunlei hash
 	h := sha1.New()
-	f, _ := os.Open(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return HashType{}, fmt.Errorf("chunkHash: open %s: %w", path, err)
+	}
 	defer f.Close()
 	if size < 0xF000 {
 		io.Copy(h, f)
@@ -109,5 +113,5 @@ func chunkHash(path string, size int64) HashType {
 	}
 	var b HashType
 	copy(b[:], h.Sum(nil))
-	return b
+	return b, nil
 }

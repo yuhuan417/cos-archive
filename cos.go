@@ -18,7 +18,10 @@ type COS struct {
 // NewCOS new COS
 func NewCOS(config COSConfig) *COS {
 	var c = new(COS)
-	u, _ := url.Parse(config.URL)
+	u, err := url.Parse(config.URL)
+	if err != nil {
+		Fatal("Invalid COS URL:", config.URL, err)
+	}
 	b := &cos.BaseURL{BucketURL: u}
 	c.c = cos.NewClient(b, &http.Client{
 		Transport: &cos.AuthorizationTransport{

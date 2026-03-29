@@ -102,7 +102,10 @@ func NewIndex(config Config) *Index {
 
 func (index *Index) metaHash(path string) string {
 	h := sha1.New()
-	f, _ := os.Open(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
 	defer f.Close()
 	io.Copy(h, f)
 	return hex.EncodeToString(h.Sum(nil))
@@ -365,7 +368,13 @@ func (index *Index) GenerateLocal(remoteIndex *Index) {
 			}
 		}
 		if !cachedHash {
-			h = chunkHash(fp, fi.Size)
+			var err error
+			h, err = chunkHash(fp, fi.Size)
+			if err != nil {
+				slog.Error("Hash calculation failed", "path", fp, "error", err)
+				delete(index.Entries.Files, fp)
+				continue
+			}
 			// slog.Info("Caculated hash ", h, " for ", fp)
 		}
 		fi.Hash = h

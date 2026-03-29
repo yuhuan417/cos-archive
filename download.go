@@ -6,6 +6,8 @@ import (
 	"path"
 )
 
+const maxDownloadRetries = 10
+
 func downloadChunk(config Config, cm ChunksMap) {
 	slog.Debug("Downloading chunks")
 	// Download chunk from map
@@ -19,21 +21,27 @@ func downloadChunk(config Config, cm ChunksMap) {
 		}
 		p := path.Join(config.COS.ChunkPrefix, k)
 		lp := path.Join(cp, k)
+		retries := 0
 		for {
+			if retries >= maxDownloadRetries {
+				Fatal("Download exceeded max retries:", p)
+			}
 			slog.Debug("Downloading", "path", p)
 			if fi, err := os.Stat(lp); err == nil {
 				size := fi.Size()
-				h := chunkHash(lp, size)
-				ck := ChunkKey{size, h}
-
-				if ck == key {
-					slog.Debug("File exists. Hash matches. Good, skip.")
-					break
+				h, hashErr := chunkHash(lp, size)
+				if hashErr == nil {
+					ck := ChunkKey{size, h}
+					if ck == key {
+						slog.Debug("File exists. Hash matches. Good, skip.")
+						break
+					}
 				}
 			}
 			err = c.DownloadFile(p, lp)
 			if err != nil {
 				slog.Debug("Download file error", "path", p, "error", err)
+				retries++
 			} else {
 				break
 			}
@@ -53,3 +61,4 @@ func downloadFiles(config Config) {
 	cm := scanRemoteChunksMap(config)
 	downloadChunk(config, cm)
 }
+

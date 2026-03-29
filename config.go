@@ -24,7 +24,7 @@ type COSConfig struct {
 	URL         string
 	ID          string
 	Key         string
-	ChunkPrefix string
+	ChunkPrefix string `json:"Prefix"`
 	Class       string
 	Retries     int
 }
@@ -45,9 +45,13 @@ func getConfig(configFileName string) (config Config) {
 
 	defer jsonFile.Close()
 
-	byteValue, _ := io.ReadAll(jsonFile)
-
-	json.Unmarshal(byteValue, &config)
+	byteValue, err := io.ReadAll(jsonFile)
+	if err != nil {
+		Fatal("Read config file error:", err)
+	}
+	if err := json.Unmarshal(byteValue, &config); err != nil {
+		Fatal("Parse config file error:", err)
+	}
 
 	return
 }
