@@ -206,11 +206,11 @@ COS-Archive 是基于腾讯云 COS **深度归档存储（DEEP_ARCHIVE）** 的�
 
 ---
 
-## 阶段二：P1 — 正确性收口与配置治理
+## 阶段二：P1 — 正确性收口与配置治理 ✅ 已完成
 
 > 下一阶段先解决“静默失败”和“错误分支走偏”的问题，再做结构性重构。
 
-### 2.1 配置文件加载与 action 级校验
+### 2.1 ✅ 配置文件加载与 action 级校验
 
 **现状问题**：
 - `config.go` 中 `os.Open` 失败仍然直接返回默认配置
@@ -221,15 +221,15 @@ COS-Archive 是基于腾讯云 COS **深度归档存储（DEEP_ARCHIVE）** 的�
 - `getConfig()` 中 `os.Open` 失败直接 `Fatal`
 - 新增 `validateConfig(action string, config Config)`，按 action 校验关键字段
 - 至少覆盖：
-  - 所有非 `browse` action：`WorkingDir` 必填
+  - `backup` / `download` / `fsck` / `verify`：`WorkingDir` 必填
   - `download` / `link` / `browse`：`TargetDir` 必填
   - `browse`：`Port` 必填
   - `backup` / `verify`：`FilePaths` 非空
-  - 所有并发路径：`Threads > 0`
+  - `backup`：`Threads > 0`
 
 ---
 
-### 2.2 明确 `LoadRemote()` 的“首次运行”与“异常失败”分支
+### 2.2 ✅ 明确 `LoadRemote()` 的“首次运行”与“异常失败”分支
 
 **现状问题**：
 - `backupFiles()` 直接忽略 `remoteIndex.LoadRemote()` 返回值
@@ -242,7 +242,7 @@ COS-Archive 是基于腾讯云 COS **深度归档存储（DEEP_ARCHIVE）** 的�
 
 ---
 
-### 2.3 补全 `chunkHash` 的 I/O 错误传播
+### 2.3 ✅ 补全 `chunkHash` 的 I/O 错误传播
 
 **现状问题**：
 - `io.Copy`、`io.CopyN`、`Seek` 返回值仍未检查
@@ -254,7 +254,7 @@ COS-Archive 是基于腾讯云 COS **深度归档存储（DEEP_ARCHIVE）** 的�
 
 ---
 
-### 2.4 `main.go` 收口 action 分发
+### 2.4 ✅ `main.go` 收口 action 分发
 
 **现状问题**：
 - 未知 action 现在会静默退出成功
@@ -447,15 +447,15 @@ go func() {
                   ├── ✅ 1.5 收口 download/link/browse 索引链路
                   └── ✅ go.mod 最低版本同步到 Go 1.21
                   └── 验证：go build 通过
+✅ 2026-04-01 ─── 阶段二（P1）已完成
+                  ├── ✅ 2.1 配置文件加载失败直接退出
+                  ├── ✅ 2.2 action 级配置校验
+                  ├── ✅ 2.3 区分远端索引不存在与远端读取失败
+                  ├── ✅ 2.4 chunkHash I/O 错误传播
+                  └── ✅ 2.4 main.go switch/default 收口
+                  └── 验证：go build && 覆盖错误配置/未知 action
 
-下一步 ─── 阶段二（P1）
-            ├── 2.1 配置文件加载与 action 级校验
-            ├── 2.2 区分远端索引不存在与远端读取失败
-            ├── 2.3 补全 chunkHash I/O 错误传播
-            └── 2.4 main.go switch/default 收口
-            └── 验证：go build && 覆盖首次备份/错误配置/未知 action
-
-随后 ─── 阶段三（P1.5）
+下一步 ─── 阶段三（P1.5）
             ├── 3.1 建立最小测试集
             └── 3.2 为后续重构建立回归保护
             └── 验证：go test ./...
@@ -490,17 +490,17 @@ go func() {
 |------|------|---------|------|
 | config.go | `io.ReadAll` 错误忽略 | 🔴 高 | ✅ P0 已修复 |
 | config.go | `json.Unmarshal` 错误忽略 | 🔴 高 | ✅ P0 已修复 |
-| config.go | `os.Open` 失败后静默回落默认配置 | 🔴 高 | 待 P1 处理 |
+| config.go | `os.Open` 失败后静默回落默认配置 | 🔴 高 | ✅ P1 已修复 |
 | chunk.go | `os.Open` 错误忽略 → panic | 🔴 高 | ✅ P0 已修复（返回 error） |
-| chunk.go | `io.Copy` / `io.CopyN` / `Seek` 错误未检查 | 🔴 高 | 待 P1 处理 |
+| chunk.go | `io.Copy` / `io.CopyN` / `Seek` 错误未检查 | 🔴 高 | ✅ P1 已修复 |
 | index.go | `metaHash` 中 `os.Open` 忽略 | 🟡 中 | ✅ P0 已修复（返回空 hash） |
 | cos.go | `url.Parse` 错误忽略 | 🟡 中 | ✅ P0 已修复 |
 | download.go | 无限重试循环 | 🔴 高 | ✅ P0 已修复（maxDownloadRetries=10） |
 | index.go | `GenerateLocal` chunkHash 错误 | 🟡 中 | ✅ P0 已修复（移除并记录错误） |
 | verify.go | `verifySingleFile` chunkHash 错误 | 🟡 中 | ✅ P0 已修复（标记 unmatched） |
 | download.go | `downloadChunk` chunkHash 错误 | 🟡 中 | ✅ P0 已修复（跳过匹配检查） |
-| backup.go | `LoadRemote()` 返回值被忽略 | 🔴 高 | 待 P1 处理 |
-| main.go | 未知 action 静默退出成功 | 🟡 中 | 待 P1 处理 |
+| backup.go | `LoadRemote()` 返回值被忽略 | 🔴 高 | ✅ P1 已修复 |
+| main.go | 未知 action 静默退出成功 | 🟡 中 | ✅ P1 已修复 |
 | backup.go:33 | `Fatal("Upload file error:", ...)` 终止进程 | 🟡 中 | 待 P1 处理 |
 | cos.go:94 | `ScanFiles` 中 `Fatal` 终止 | 🟡 中 | 待 P1 处理 |
 | 全项目 ~15 处 | `Fatal()` 替代 error 返回 | 🟢 低 | 待 P2 处理 |

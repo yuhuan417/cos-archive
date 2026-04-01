@@ -40,7 +40,7 @@ func getConfig(configFileName string) (config Config) {
 	jsonFile, err := os.Open(configFileName)
 
 	if err != nil {
-		return
+		Fatal("Open config file error:", err)
 	}
 
 	defer jsonFile.Close()
@@ -54,4 +54,74 @@ func getConfig(configFileName string) (config Config) {
 	}
 
 	return
+}
+
+func validateConfig(action string, config Config) {
+	switch action {
+	case "backup":
+		validateWorkingDir(config)
+		validateFilePaths(config)
+		validateThreads(config)
+		validateCOSConfig(config)
+	case "restore":
+		validateCOSConfig(config)
+	case "download":
+		validateWorkingDir(config)
+		validateTargetDir(config)
+		validateCOSConfig(config)
+	case "browse":
+		validateTargetDir(config)
+		if config.Port == "" {
+			Fatal("Empty port.")
+		}
+	case "link":
+		validateTargetDir(config)
+	case "fsck":
+		validateWorkingDir(config)
+		validateCOSConfig(config)
+	case "verify":
+		validateWorkingDir(config)
+		validateFilePaths(config)
+		validateCOSConfig(config)
+	case "":
+		Fatal("Empty action.")
+	default:
+		Fatal("Unknown action:", action)
+	}
+}
+
+func validateWorkingDir(config Config) {
+	if config.WorkingDir == "" {
+		Fatal("Empty working dir.")
+	}
+}
+
+func validateTargetDir(config Config) {
+	if config.TargetDir == "" {
+		Fatal("Empty target dir.")
+	}
+}
+
+func validateFilePaths(config Config) {
+	if len(config.FilePaths) == 0 {
+		Fatal("Empty file paths.")
+	}
+}
+
+func validateThreads(config Config) {
+	if config.Threads <= 0 {
+		Fatal("Invalid threads:", config.Threads)
+	}
+}
+
+func validateCOSConfig(config Config) {
+	if config.COS.URL == "" {
+		Fatal("Empty COS URL.")
+	}
+	if config.COS.ID == "" {
+		Fatal("Empty COS ID.")
+	}
+	if config.COS.Key == "" {
+		Fatal("Empty COS key.")
+	}
 }

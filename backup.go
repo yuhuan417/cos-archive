@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path"
@@ -117,7 +118,13 @@ func backupFiles(config Config) {
 	// 	fsckRemote(config)
 	// }
 	remoteIndex := NewIndex(config)
-	remoteIndex.LoadRemote()
+	err := remoteIndex.LoadRemote()
+	if err != nil && !errors.Is(err, ErrIndexNotFound) {
+		Fatal("Can't load remote index:", err)
+	}
+	if errors.Is(err, ErrIndexNotFound) {
+		slog.Info("Remote index not found, starting fresh backup")
+	}
 
 	localIndex := NewIndex(config)
 	localIndex.GenerateLocal(remoteIndex)

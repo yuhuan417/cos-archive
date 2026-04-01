@@ -23,6 +23,8 @@ import (
 // HashType ...
 type HashType [20]byte
 
+var ErrIndexNotFound = errors.New("remote index not found")
+
 // DirInfo ...
 type DirInfo struct {
 	Mode os.FileMode
@@ -243,7 +245,7 @@ func (index *Index) getLatestIndex() (string, error) {
 		latestIndex = indexList[0]
 		slog.Debug("Using latest index", "index", latestIndex)
 	} else {
-		err = errors.New("NO REMOTE IDEX")
+		err = ErrIndexNotFound
 	}
 	return latestIndex, err
 }
@@ -256,21 +258,24 @@ func (index *Index) LoadRemote() error {
 
 	latestIndex, err := index.getLatestIndex()
 	if err != nil {
-		slog.Debug("Not found remote index.")
+		return err
 	}
 
 	rh := index.getRemoteHash(latestIndex)
 	riPath := ""
 
-	if mh == rh {
+	if mh != "" && mh == rh {
 		slog.Debug("Hash match, using local old index.")
 		riPath = oldPath
 	} else {
 		riPath = path.Join(index.config.WorkingDir, index.config.Index+".remote")
-		os.Remove(riPath)
-		err := index.downloadRemote(latestIndex, riPath)
+		err := os.Remove(riPath)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		err = index.downloadRemote(latestIndex, riPath)
 		if err != nil {
-			slog.Debug("Can't download remote index", "error", err)
+			return err
 		}
 		slog.Debug("Download remote index to", "path", riPath)
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"os"
 	"path"
 
 	"github.com/allan-simon/go-singleinstance"
@@ -18,39 +19,56 @@ func main() {
 	InitLogger(*verbose)
 
 	config := getConfig(*configPath)
+	validateConfig(*action, config)
 
-	if *action == "browse" {
-		slog.Info("Action browse")
+	if *action != "browse" {
+		lockPath := getLockFilePath(config)
+		if err := os.MkdirAll(path.Dir(lockPath), 0755); err != nil {
+			Fatal("Create lock dir error:", err)
+		}
+		lockFile, err := singleinstance.CreateLockFile(lockPath)
+		if err != nil {
+			Fatal("An instance already exists")
+		}
+		defer lockFile.Close()
+	}
+
+	switch *action {
+	case "browse":
+		slog.Info("Action: browse")
 		browseFiles(config)
-		return
-	}
-
-	lockFile, err := singleinstance.CreateLockFile(path.Join(config.WorkingDir, "pid.lock"))
-	if err != nil {
-		Fatal("An instance already exists")
-	}
-	defer lockFile.Close()
-
-	if *action == "restore" {
+	case "restore":
 		slog.Info("Action: restore")
 		restoreFiles(config)
-	} else if *action == "download" {
+	case "download":
 		slog.Info("Action: download")
 		downloadFiles(config)
-	} else if *action == "link" {
+	case "link":
 		slog.Info("Action: link")
 		linkFiles(config)
-	} else if *action == "backup" {
+	case "backup":
 		slog.Info("Action: backup")
 		backupFiles(config)
-	} else if *action == "fsck" {
+	case "fsck":
 		slog.Info("Action: fsck")
 		fsckRemote(config)
-	} else if *action == "verify" {
+	case "verify":
 		slog.Info("Action: verify")
 		verifyFiles(config)
+	default:
+		Fatal("Unknown action:", *action)
 	}
-	
+
 	// 在程序结束时输出调试信息（非 verbose 模式）
 	PrintDebugDetails()
+}
+
+func getLockFilePath(config Config) string {
+	if config.WorkingDir != "" {
+		return path.Join(config.WorkingDir, "pid.lock")
+	}
+	if config.TargetDir != "" {
+		return path.Join(config.TargetDir, "pid.lock")
+	}
+	return "pid.lock"
 }

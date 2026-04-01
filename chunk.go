@@ -23,6 +23,7 @@ type ChunkKey struct {
 
 // ChunksMap struct
 type ChunksMap = map[ChunkKey]bool
+
 func parseInt64FromBytes(b []byte) int64 {
 	r := int64(0)
 	for _, i := range b {
@@ -103,13 +104,25 @@ func chunkHash(path string, size int64) (HashType, error) {
 	}
 	defer f.Close()
 	if size < 0xF000 {
-		io.Copy(h, f)
+		if _, err := io.Copy(h, f); err != nil {
+			return HashType{}, fmt.Errorf("chunkHash: read %s: %w", path, err)
+		}
 	} else {
-		io.CopyN(h, f, 0x5000)
-		f.Seek(size/3, 0)
-		io.CopyN(h, f, 0x5000)
-		f.Seek(size-0x5000, 0)
-		io.CopyN(h, f, 0x5000)
+		if _, err := io.CopyN(h, f, 0x5000); err != nil {
+			return HashType{}, fmt.Errorf("chunkHash: head %s: %w", path, err)
+		}
+		if _, err := f.Seek(size/3, 0); err != nil {
+			return HashType{}, fmt.Errorf("chunkHash: seek middle %s: %w", path, err)
+		}
+		if _, err := io.CopyN(h, f, 0x5000); err != nil {
+			return HashType{}, fmt.Errorf("chunkHash: middle %s: %w", path, err)
+		}
+		if _, err := f.Seek(size-0x5000, 0); err != nil {
+			return HashType{}, fmt.Errorf("chunkHash: seek tail %s: %w", path, err)
+		}
+		if _, err := io.CopyN(h, f, 0x5000); err != nil {
+			return HashType{}, fmt.Errorf("chunkHash: tail %s: %w", path, err)
+		}
 	}
 	var b HashType
 	copy(b[:], h.Sum(nil))
