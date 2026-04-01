@@ -134,6 +134,25 @@ func (index *Index) Load(path string) error {
 	return err
 }
 
+// Save writes index to a local file.
+func (index *Index) Save(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	w, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	jh := codec.JsonHandle{Indent: 2}
+	enc := codec.NewEncoder(w, &jh)
+	if err := enc.Encode(index); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (index *Index) downloadRemote(remote string, path string) error {
 	c := NewCOS(index.config.COS)
 	slog.Debug("Download remote index", "remote", remote, "path", path)

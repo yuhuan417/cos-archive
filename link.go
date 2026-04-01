@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log/slog"
 	"os"
 	"path"
 	"time"
@@ -9,15 +8,14 @@ import (
 
 func linkFiles(config Config) {
 	if config.TargetDir == "" {
-		slog.Debug("Empty target dir")
+		Fatal("Empty target dir.")
 	}
 	// index path
 	riPath := path.Join(config.TargetDir, config.Index+".remote")
 	ri := NewIndex(config)
 	err := ri.Load(riPath)
 	if err != nil {
-		slog.Debug("Can't load index")
-
+		Fatal("Can't load index:", riPath, err)
 	}
 
 	// chunk path
@@ -59,7 +57,7 @@ func linkFiles(config Config) {
 
 		err = os.Chtimes(targetPath, now, mtime)
 		if err != nil {
-			Fatal("Chmod error:", targetPath, err)
+			Fatal("Chtimes error:", targetPath, err)
 		}
 	}
 }

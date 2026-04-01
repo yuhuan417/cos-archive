@@ -58,7 +58,10 @@ func downloadFiles(config Config) {
 	if err != nil {
 		Fatal("Can't download index")
 	}
+	err = index.Save(path.Join(config.TargetDir, config.Index+".remote"))
+	if err != nil {
+		Fatal("Can't persist downloaded index:", err)
+	}
 	cm := scanRemoteChunksMap(config)
 	downloadChunk(config, cm)
 }
-

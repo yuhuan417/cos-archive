@@ -24,6 +24,8 @@ func NewDirEnt() *DirEnt {
 }
 
 func handleDir(m DirEnt, p string, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "no-sniff")
 	fmt.Fprintf(w, `
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
@@ -107,7 +109,7 @@ func handleDir(m DirEnt, p string, w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFile(config Config, fi *FileInfo, p string, w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "no-sniff")
 	fmt.Fprintf(w, `
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
@@ -126,7 +128,7 @@ func handleFile(config Config, fi *FileInfo, p string, w http.ResponseWriter, r 
 }
 
 func handleLink(config Config, fi *LinkInfo, p string, w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "no-sniff")
 	fmt.Fprintf(w, `
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
@@ -167,14 +169,31 @@ func browseHandler(config Config, entries DirEnt, dm DirMap) http.Handler {
 	})
 }
 
-func browseFiles(config Config) {
+func loadBrowseIndex(config Config) *Index {
+	if config.TargetDir == "" {
+		Fatal("Empty target dir.")
+	}
 	index := NewIndex(config)
-	index.Load(path.Join(config.TargetDir, config.Index))
+	paths := []string{
+		path.Join(config.TargetDir, config.Index+".remote"),
+		path.Join(config.TargetDir, config.Index),
+	}
+	for _, p := range paths {
+		if err := index.Load(p); err == nil {
+			return index
+		}
+	}
+	Fatal("Can't load browse index from target dir.")
+	return nil
+}
+
+func browseFiles(config Config) {
+	index := loadBrowseIndex(config)
 	dm := make(DirMap)
 	for fp, fi := range index.Entries.Files {
 		dp := path.Dir(fp)
 		bn := path.Base(fp)
-		if _, ok := index.Entries.Files[dp]; !ok {
+		if _, ok := index.Entries.Dirs[dp]; !ok {
 			dp = "/"
 			bn = fp
 		}
@@ -200,7 +219,7 @@ func browseFiles(config Config) {
 	for fp, fi := range index.Entries.Links {
 		dp := path.Dir(fp)
 		bn := path.Base(fp)
-		if _, ok := index.Entries.Links[dp]; !ok {
+		if _, ok := index.Entries.Dirs[dp]; !ok {
 			dp = "/"
 			bn = fp
 		}

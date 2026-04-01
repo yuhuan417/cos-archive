@@ -9,13 +9,13 @@ COS-Archive 是一个基于 Go 语言开发的增量归档备份工具，专为 
 - **分块上传**：支持大文件自动分块上传
 - **版本管理**：类似 Time Machine 的多版本保存及恢复功能
 - **云端延迟删除**：支持云端自动延迟删除机制
-- **元数据保护**：保持文件权限、时间戳、属主等元信息
+- **元数据保护**：保持文件权限、时间戳等元信息
 - **符号链接支持**：保持符号链接结构
 - **中断恢复**：本地任务随时中断不影响数据最终一致性
 
 ## 技术栈
 
-- **语言**：Go 1.14
+- **语言**：Go 1.21+
 - **主要依赖**：
   - `github.com/tencentyun/cos-go-sdk-v5`：腾讯云 COS SDK
   - `github.com/dustin/go-humanize`：文件大小人性化显示
@@ -59,12 +59,20 @@ go build -o cos-archive
 ### 支持的操作类型
 
 - `backup`：执行增量备份（默认操作）
-- `restore`：恢复文件
-- `download`：下载文件
-- `browse`：浏览云端文件
-- `link`：处理符号链接
+- `restore`：为云端 chunk 发起解冻请求
+- `download`：下载远端索引和 chunk 到本地目录
+- `browse`：浏览本地索引内容
+- `link`：基于已下载 chunk 重建恢复目录
 - `fsck`：执行一致性检查
 - `verify`：验证文件完整性
+
+### 典型恢复流程
+
+1. 执行 `restore`
+2. 等待 COS 完成解冻
+3. 执行 `download`
+4. 执行 `link`
+5. 如需查看索引内容，再执行 `browse`
 
 ## 配置说明
 
@@ -72,30 +80,40 @@ go build -o cos-archive
 
 ```json
 {
+    "BasePath": "/",
     "FilePaths": [
         "/backup/1",
         "/backup/2"
     ],
+    "WorkingDir": "/var/lib/cos-archive/work",
+    "TargetDir": "/var/lib/cos-archive/restore-cache",
     "Threads": 4,
     "Port": "3389",
     "COS": {
         "URL": "https://example-1250000000.cos.ap-region.myqcloud.com",
         "ID": "your-cos-id",
         "Key": "your-cos-key",
-        "Prefix": "data/"
+        "Prefix": "data/",
+        "Class": "DEEP_ARCHIVE",
+        "Retries": 1
     }
 }
 ```
 
 ### 配置参数说明
 
+- `BasePath`：扫描备份路径时使用的根目录
 - `FilePaths`：需要备份的文件路径列表
+- `WorkingDir`：工作目录，保存锁文件和远端索引缓存
+- `TargetDir`：下载 chunk、浏览索引和恢复目录的目标路径
 - `Threads`：上传线程数（默认 4）
 - `Port`：服务端口（用于浏览功能）
 - `COS.URL`：腾讯云 COS 访问地址
 - `COS.ID`：腾讯云访问密钥 ID
 - `COS.Key`：腾讯云访问密钥
 - `COS.Prefix`：云端存储前缀（默认 "data/"）
+- `COS.Class`：上传对象的存储类别（默认 `DEEP_ARCHIVE`）
+- `COS.Retries`：上传遇到 `ServiceUnavailable` 时的重试次数
 
 ## 存储设计
 
@@ -177,7 +195,7 @@ go build -o cos-archive
 - 索引文件以 JSON 格式存储，使用 codec 库进行序列化
 - 支持本地缓存和远程索引的哈希比较，避免不必要的下载
 - 索引文件命名：`meta.json.{timestamp}`，保留最近30个版本
-- 删除的文件块会延迟删除，默认延迟时间为存储最短计费时长（180天）
+- 删除标记会先记录为 7 天宽限期，但真正删除不会早于对象的 180 天最低计费期
 
 ## 操作对比表
 
@@ -200,7 +218,7 @@ go build -o cos-archive
 ## 开发约定
 
 - 使用 Go 标准格式化工具
-- 错误处理使用 log.Fatal 输出严重错误
+- 错误处理使用项目内的 `Fatal` 包装统一退出
 - 并发处理使用 sync.WaitGroup
 - 文件路径使用 path.Join 进行跨平台兼容
 - 配置项提供合理的默认值
@@ -209,9 +227,8 @@ go build -o cos-archive
 
 - 程序使用单实例锁，防止同时运行多个实例
 - 云端存储默认使用 DEEP_ARCHIVE 存储类别
-- 删除的文件会延迟 7 天后实际删除
+- 删除候选默认先标记 7 天，但实际删除不会早于 180 天最低计费期
 - 首次运行会进行全量备份
 - 索引文件存储在云端，不进行归档级别存储
-
 
 
