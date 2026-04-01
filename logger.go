@@ -78,7 +78,7 @@ func InitLogger(verbose bool) {
 			},
 		})
 	}
-	
+
 	// 设置为默认 logger
 	slog.SetDefault(defaultLogger)
 }
@@ -145,20 +145,20 @@ func (h *SimpleHandler) Handle(ctx context.Context, r slog.Record) error {
 	default:
 		level = "?"
 	}
-	
+
 	// 获取简短时间格式 (HH:MM:SS)
 	t := r.Time
 	timeStr := t.Format("15:04:05")
-	
+
 	// 输出格式：HH:MM:SS L msg
 	fmt.Fprintf(h.writer, "%s %s %s", timeStr, level, r.Message)
-	
+
 	// 添加键值对
 	r.Attrs(func(a slog.Attr) bool {
 		fmt.Fprintf(h.writer, " %s=%v", a.Key, a.Value)
 		return true
 	})
-	
+
 	fmt.Fprintln(h.writer)
 	return nil
 }

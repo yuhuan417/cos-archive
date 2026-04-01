@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -9,11 +11,9 @@ import (
 )
 
 func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, chunks ChunksMap, unmatchedFiles *[]string) error {
-	// slog.Debug("Verifying: ", path)
 	if de.IsDir() {
 		for _, skip := range config.SkipList {
 			if de.Name() == skip {
-				// slog.Debug("In skiplist: ", skip, " Skip: ", path)
 				return filepath.SkipDir
 			}
 		}
@@ -35,7 +35,10 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 		return nil
 	}
 	if de.Type()&fs.ModeSymlink != 0 {
-		link, _ := os.Readlink(path)
+		link, err := os.Readlink(path)
+		if err != nil {
+			return err
+		}
 		l := LinkInfo{
 			LinkTo: link,
 		}
@@ -60,14 +63,12 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 			Size:    fi.Size(),
 		}
 
-		var hashErr error
-		f.Hash, hashErr = chunkHash(path, f.Size)
-		if hashErr != nil {
-			slog.Debug("Hash calculation failed", "path", path, "error", hashErr)
+		f.Hash, err = chunkHash(path, f.Size)
+		if err != nil {
+			slog.Debug("Hash calculation failed", "path", path, "error", err)
 			*unmatchedFiles = append(*unmatchedFiles, path)
 			return nil
 		}
-		// slog.Debug("Calculate hash: ", path, f.Hash)
 		if _, ok := chunks[ChunkKey{f.Size, f.Hash}]; !ok {
 			slog.Debug("Missing chunk", "path", path, "size", f.Size, "hash", f.Hash)
 			*unmatchedFiles = append(*unmatchedFiles, path)
@@ -85,15 +86,20 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 	return nil
 }
 
-func verifyFiles(config Config) {
-	ri := NewIndex(config)
-	err := ri.LoadRemote()
+func verifyFiles(ctx context.Context, config Config) error {
+	c, err := NewCOS(config.COS)
 	if err != nil {
-		Fatal("Can't download remote index")
-		return
+		return err
+	}
+	ri := NewIndex(config, c)
+	if err := ri.LoadRemote(ctx); err != nil {
+		return fmt.Errorf("download remote index: %w", err)
 	}
 
-	cm := scanRemoteChunksMap(config)
+	cm, err := scanRemoteChunksMap(ctx, c, config)
+	if err != nil {
+		return err
+	}
 
 	uf := []string{}
 
@@ -105,13 +111,13 @@ func verifyFiles(config Config) {
 			}
 			return verifySingleFile(p, de, config, *ri, cm, &uf)
 		})
-
 		if err != nil {
-			continue
+			return err
 		}
 	}
 	if len(uf) > 0 {
-		Fatal("Verify failed: ", uf)
+		return fmt.Errorf("verify failed: %v", uf)
 	}
 	slog.Debug("Verified!")
+	return nil
 }

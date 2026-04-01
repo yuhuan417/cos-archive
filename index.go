@@ -1,11 +1,11 @@
 package main
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
 	"io"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,86 +20,31 @@ import (
 	"github.com/ugorji/go/codec"
 )
 
-// HashType ...
-type HashType [20]byte
-
-var ErrIndexNotFound = errors.New("remote index not found")
-
-// DirInfo ...
-type DirInfo struct {
-	Mode os.FileMode
-}
-
-// LinkInfo ...
-type LinkInfo struct {
-	LinkTo string
-}
-
-// FileInfo struct
-type FileInfo struct {
-	Size    int64
-	Mode    os.FileMode
-	ModTime int64
-	Hash    HashType
-}
-
-// UnmarshalText from json
-func (h *HashType) UnmarshalText(text []byte) error {
-	if len(text) == 0 {
-		*h = HashType{}
-		return nil
-	}
-	th := h[:]
-	_, err := hex.Decode(th, text)
-	return err
-}
-
-// MarshalText to json
-func (h HashType) MarshalText() ([]byte, error) {
-	empty := HashType{}
-	if h == empty {
-		return make([]byte, 0), nil
-	}
-	b := make([]byte, hex.EncodedLen(len(h)))
-	hex.Encode(b, h[:])
-	return b, nil
-}
-
-// FileInfoMap struct
-type FileInfoMap = map[string]*FileInfo
-
-// DirInfoMap struct
-type DirInfoMap = map[string]*DirInfo
-
-// LinkInfoMap struct
-type LinkInfoMap = map[string]*LinkInfo
-
-// ChunkDeleteMarkMap struct
-type ChunkDeleteMarkMap = map[ChunkKey]int64
-
-// DirEnt ...
-type DirEnt struct {
-	Files FileInfoMap
-	Dirs  DirInfoMap
-	Links LinkInfoMap
-}
-
 // Index struct
 type Index struct {
 	Entries       DirEnt
 	DeletedChunks ChunkDeleteMarkMap
 	config        Config
+	cos           *COS
 }
 
 // NewIndex ...
-func NewIndex(config Config) *Index {
+func NewIndex(config Config, c *COS) *Index {
 	index := Index{}
 	index.Entries.Files = make(FileInfoMap)
 	index.Entries.Dirs = make(DirInfoMap)
 	index.Entries.Links = make(LinkInfoMap)
 	index.DeletedChunks = make(ChunkDeleteMarkMap)
 	index.config = config
+	index.cos = c
 	return &index
+}
+
+func (index *Index) requireCOS() (*COS, error) {
+	if index.cos == nil {
+		return nil, errors.New("cos client required")
+	}
+	return index.cos, nil
 }
 
 func (index *Index) metaHash(path string) string {
@@ -109,7 +54,9 @@ func (index *Index) metaHash(path string) string {
 		return ""
 	}
 	defer f.Close()
-	io.Copy(h, f)
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -125,15 +72,13 @@ func (index *Index) Load(path string) error {
 	jh := codec.JsonHandle{}
 	jh.ReaderBufferSize = 8192
 
-	var dec *codec.Decoder = codec.NewDecoder(jf, &jh)
-	err = dec.Decode(index)
-
-	if err != nil {
+	dec := codec.NewDecoder(jf, &jh)
+	if err := dec.Decode(index); err != nil {
 		slog.Debug("Load index error", "path", path, "error", err)
 		return err
 	}
 
-	return err
+	return nil
 }
 
 // Save writes index to a local file.
@@ -155,252 +100,201 @@ func (index *Index) Save(path string) error {
 	return nil
 }
 
-func (index *Index) downloadRemote(remote string, path string) error {
-	c := NewCOS(index.config.COS)
-	slog.Debug("Download remote index", "remote", remote, "path", path)
-	err := c.DownloadFile(remote, path)
+func (index *Index) downloadRemote(ctx context.Context, remote string, localPath string) error {
+	c, err := index.requireCOS()
 	if err != nil {
-		slog.Debug("Download index error", "error", err)
+		return err
 	}
-	return err
+	slog.Debug("Download remote index", "remote", remote, "path", localPath)
+	if err := c.DownloadFile(ctx, remote, localPath); err != nil {
+		slog.Debug("Download index error", "error", err)
+		return err
+	}
+	return nil
 }
 
-func (index *Index) getRemoteHash(p string) string {
-	c := NewCOS(index.config.COS)
-	h := c.GetHeader(p)
-
-	if h == nil {
-		return ""
+func (index *Index) getRemoteHash(ctx context.Context, p string) (string, error) {
+	c, err := index.requireCOS()
+	if err != nil {
+		return "", err
 	}
-	return h.Get("x-cos-meta-hash")
+	h, err := c.GetHeader(ctx, p)
+	if err != nil {
+		return "", err
+	}
+	if h == nil {
+		return "", nil
+	}
+	return h.Get("x-cos-meta-hash"), nil
 }
 
 // UploadRemote ...
-func (index *Index) UploadRemote() {
+func (index *Index) UploadRemote(ctx context.Context) error {
 	slog.Debug("Uploading index")
+	if err := os.MkdirAll(index.config.WorkingDir, 0755); err != nil {
+		return err
+	}
 	w, err := os.CreateTemp(index.config.WorkingDir, index.config.Index+".*.new")
 	if err != nil {
-		Fatal("Write index error:", err)
+		return err
 	}
 	defer w.Close()
+
 	jh := codec.JsonHandle{Indent: 2}
 	h := new(codec.JsonHandle)
 	h.WriterBufferSize = 8192
-	var enc *codec.Encoder = codec.NewEncoder(w, &jh)
-	err = enc.Encode(index)
-	if err != nil {
-		Fatal("Encode index json error:", err)
+	enc := codec.NewEncoder(w, &jh)
+	if err := enc.Encode(index); err != nil {
+		return err
 	}
 	tmpfp := w.Name()
 
 	lh := index.metaHash(tmpfp)
-	latestIndex, err := index.getLatestIndex()
-	if err != nil {
-		slog.Debug("Not found remote index.")
+	latestIndex := ""
+	rh := ""
+	latestIndex, err = index.getLatestIndex(ctx)
+	if err != nil && !errors.Is(err, ErrIndexNotFound) {
+		return err
 	}
-	rh := index.getRemoteHash(latestIndex)
+	if latestIndex != "" {
+		rh, err = index.getRemoteHash(ctx, latestIndex)
+		if err != nil {
+			return err
+		}
+	}
 	if lh != rh {
 		hh := http.Header{}
 		hh.Add("x-cos-meta-hash", lh)
-		c := NewCOS(index.config.COS)
+		c, err := index.requireCOS()
+		if err != nil {
+			return err
+		}
 		newName := index.config.Index + "." + strconv.FormatInt(time.Now().Unix(), 10)
 		slog.Debug("Upload index to", "name", newName)
-		err := c.UploadFile(newName, tmpfp, "STANDARD", hh)
-		if err != nil {
-			Fatal("Upload index fail", "error", err)
+		if err := c.UploadFile(ctx, newName, tmpfp, "STANDARD", hh); err != nil {
+			return err
 		}
 	} else {
 		slog.Debug("Hash matched, old index is good enough")
 	}
 	fp := path.Join(index.config.WorkingDir, index.config.Index)
-	err = os.Rename(tmpfp, fp)
-	if err != nil {
-		Fatal("Index rename error: ", err)
+	if err := os.Rename(tmpfp, fp); err != nil {
+		return err
 	}
+	return nil
 }
 
-func (index *Index) getLatestIndex() (string, error) {
-	c := NewCOS(index.config.COS)
+func (index *Index) getLatestIndex(ctx context.Context) (string, error) {
+	c, err := index.requireCOS()
+	if err != nil {
+		return "", err
+	}
 
 	indexList := []string{}
-	c.ScanFiles(index.config.Index, func(obj cos.Object) {
+	err = c.ScanFiles(ctx, index.config.Index, func(obj cos.Object) {
 		indexList = append(indexList, obj.Key)
 	})
+	if err != nil {
+		return "", err
+	}
 	sort.Slice(indexList, func(i, j int) bool {
-		p := index.config.Index + "."
-		numA, _ := strconv.ParseInt(strings.TrimPrefix(indexList[i], p), 10, 64)
-		numB, _ := strconv.ParseInt(strings.TrimPrefix(indexList[j], p), 10, 64)
+		prefix := index.config.Index + "."
+		numA, _ := strconv.ParseInt(strings.TrimPrefix(indexList[i], prefix), 10, 64)
+		numB, _ := strconv.ParseInt(strings.TrimPrefix(indexList[j], prefix), 10, 64)
 		return numB < numA
 	})
 	if len(indexList) > 30 {
 		for i := 30; i < len(indexList); i++ {
-			c.DeleteFile(indexList[i])
+			if err := c.DeleteFile(ctx, indexList[i]); err != nil {
+				slog.Debug("Delete outdated index error", "index", indexList[i], "error", err)
+			}
 		}
 	}
 
-	latestIndex := ""
-	var err error
-	err = nil
-	if len(indexList) > 0 {
-		latestIndex = indexList[0]
-		slog.Debug("Using latest index", "index", latestIndex)
-	} else {
-		err = ErrIndexNotFound
+	if len(indexList) == 0 {
+		return "", ErrIndexNotFound
 	}
-	return latestIndex, err
+	latestIndex := indexList[0]
+	slog.Debug("Using latest index", "index", latestIndex)
+	return latestIndex, nil
 }
 
 // LoadRemote ...
-func (index *Index) LoadRemote() error {
+func (index *Index) LoadRemote(ctx context.Context) error {
 	slog.Debug("Loading remote index")
 	oldPath := path.Join(index.config.WorkingDir, index.config.Index)
 	mh := index.metaHash(oldPath)
 
-	latestIndex, err := index.getLatestIndex()
+	latestIndex, err := index.getLatestIndex(ctx)
 	if err != nil {
 		return err
 	}
 
-	rh := index.getRemoteHash(latestIndex)
-	riPath := ""
-
+	rh, err := index.getRemoteHash(ctx, latestIndex)
+	if err != nil {
+		return err
+	}
 	if mh != "" && mh == rh {
 		slog.Debug("Hash match, using local old index.")
-		riPath = oldPath
-	} else {
-		riPath = path.Join(index.config.WorkingDir, index.config.Index+".remote")
-		err := os.Remove(riPath)
-		if err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		err = index.downloadRemote(latestIndex, riPath)
-		if err != nil {
-			return err
-		}
-		slog.Debug("Download remote index to", "path", riPath)
+		return index.Load(oldPath)
 	}
+
+	riPath := path.Join(index.config.WorkingDir, index.config.Index+".remote")
+	if err := os.MkdirAll(index.config.WorkingDir, 0755); err != nil {
+		return err
+	}
+	if err := os.Remove(riPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := index.downloadRemote(ctx, latestIndex, riPath); err != nil {
+		return err
+	}
+	slog.Debug("Download remote index to", "path", riPath)
 	return index.Load(riPath)
 }
 
 // DeleteOutdatedChunks ...
-func (index *Index) DeleteOutdatedChunks() {
+func (index *Index) DeleteOutdatedChunks(ctx context.Context) error {
 	now := time.Now().Unix()
-	c := NewCOS(index.config.COS)
+	c, err := index.requireCOS()
+	if err != nil {
+		return err
+	}
 	cnt := 0
+	var errs error
 	for fp, t := range index.DeletedChunks {
-		if now > t {
-			var lmt int64 = 0
-			h := c.GetHeader(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
-			if h != nil {
-				lm := h.Get("Last-Modified")
-				layout := "Mon, 2 Jan 2006 15:04:05 MST"
+		if now <= t {
+			continue
+		}
+		var lmt int64
+		h, err := c.GetHeader(ctx, path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
+		if err != nil {
+			errs = errors.Join(errs, err)
+			continue
+		}
+		if h != nil {
+			lm := h.Get("Last-Modified")
+			layout := "Mon, 2 Jan 2006 15:04:05 MST"
 
-				t, err := time.Parse(layout, lm)
-				if err == nil {
-					lmt = t.AddDate(0, 0, 180).Unix()
-				}
+			modTime, err := time.Parse(layout, lm)
+			if err == nil {
+				lmt = modTime.AddDate(0, 0, 180).Unix()
 			}
-			if lmt > t {
-				slog.Debug("Fix time", "path", fp, "from", t, "to", lmt)
-				index.DeletedChunks[fp] = lmt
+		}
+		if lmt > t {
+			slog.Debug("Fix time", "path", fp, "from", t, "to", lmt)
+			index.DeletedChunks[fp] = lmt
+		}
+		if now > lmt {
+			slog.Debug("Deleting remote chunk", "path", fp)
+			if err := c.DeleteFile(ctx, path.Join(index.config.COS.ChunkPrefix, chunkPath(fp))); err != nil {
+				errs = errors.Join(errs, err)
+				continue
 			}
-			if now > lmt {
-				slog.Debug("Deleting remote chunk", "path", fp)
-				err := c.DeleteFile(path.Join(index.config.COS.ChunkPrefix, chunkPath(fp)))
-				if err != nil {
-					continue
-				}
-				delete(index.DeletedChunks, fp)
-				cnt = cnt + 1
-			}
+			delete(index.DeletedChunks, fp)
+			cnt++
 		}
 	}
 	slog.Info("Deleting outdated remote chunk", "count", cnt)
-}
-
-func (index *Index) scanSingleFile(path string, de fs.DirEntry) error {
-	// slog.Info("Processsing: ", path)
-	if de.IsDir() {
-		for _, skip := range index.config.SkipList {
-			if de.Name() == skip {
-				// slog.Info("In skiplist: ", skip, " Skip: ", path)
-				return filepath.SkipDir
-			}
-		}
-		fi, err := de.Info()
-		if err != nil {
-			slog.Debug("Can't stat dir", "path", path)
-			return nil
-		}
-		d := DirInfo{
-			Mode: fi.Mode().Perm(),
-		}
-		index.Entries.Dirs[path] = &d
-		return nil
-	}
-	if de.Type()&fs.ModeSymlink != 0 {
-		link, _ := os.Readlink(path)
-		l := LinkInfo{
-			LinkTo: link,
-		}
-		index.Entries.Links[path] = &l
-		return nil
-	}
-	if de.Type().IsRegular() {
-		fi, err := de.Info()
-		if err != nil {
-			slog.Debug("Can't stat file", "path", path)
-			return nil
-		}
-		f := FileInfo{
-			Mode:    fi.Mode().Perm(),
-			ModTime: fi.ModTime().Unix(),
-			Size:    fi.Size(),
-		}
-		index.Entries.Files[path] = &f
-		return nil
-	}
-	slog.Debug("Skip non-regular file", "path", path)
-	return nil
-}
-
-// GenerateLocal ...
-func (index *Index) GenerateLocal(remoteIndex *Index) {
-	slog.Debug("Generating local index")
-	for _, filePath := range index.config.FilePaths {
-		slog.Debug("Walk", "path", filePath)
-
-		err := filepath.WalkDir(path.Join(index.config.BasePath, filePath), func(path string, de fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			return index.scanSingleFile(path, de)
-		})
-
-		if err != nil {
-			continue
-		}
-	}
-	for fp, fi := range index.Entries.Files {
-		var h HashType
-		cachedHash := false
-		if remoteFileInfo, ok := remoteIndex.Entries.Files[fp]; ok {
-			if remoteFileInfo.Size == fi.Size && remoteFileInfo.ModTime == fi.ModTime {
-				h = remoteFileInfo.Hash
-				cachedHash = true
-				// slog.Info("Use cached hash ", h, " for ", fp)
-			}
-		}
-		if !cachedHash {
-			var err error
-			h, err = chunkHash(fp, fi.Size)
-			if err != nil {
-				slog.Error("Hash calculation failed", "path", fp, "error", err)
-				delete(index.Entries.Files, fp)
-				continue
-			}
-			// slog.Info("Caculated hash ", h, " for ", fp)
-		}
-		fi.Hash = h
-	}
+	return errs
 }

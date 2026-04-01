@@ -1,36 +1,45 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"time"
 )
 
-func fsckRemote(config Config) {
-	ri := NewIndex(config)
-	err := ri.LoadRemote()
-
+func fsckRemote(ctx context.Context, config Config) error {
+	c, err := NewCOS(config.COS)
 	if err != nil {
-		Fatal("Can't load remote index: ", err)
+		return err
+	}
+	ri := NewIndex(config, c)
+	if err := ri.LoadRemote(ctx); err != nil {
+		return err
 	}
 
-	ri.DeleteOutdatedChunks()
+	if err := ri.DeleteOutdatedChunks(ctx); err != nil {
+		slog.Debug("Delete outdated chunk errors", "error", err)
+	}
 
-	cm := scanRemoteChunksMap(config)
+	cm, err := scanRemoteChunksMap(ctx, c, config)
+	if err != nil {
+		return err
+	}
 
+	var errs error
 	for fp, fi := range ri.Entries.Files {
 		ch := ChunkKey{fi.Size, fi.Hash}
-		_, ok := cm[ch]
-		if ok {
+		if _, ok := cm[ch]; ok {
 			cm[ch] = true
 		} else {
 			delete(ri.Entries.Files, fp)
 			slog.Debug("Chunk lost", "fp", fp, "path", chunkPath(ch))
+			errs = errors.Join(errs, ErrChunkLost)
 		}
 	}
 	now := time.Now().Unix()
 	for k, t := range ri.DeletedChunks {
-		_, ok := cm[k]
-		if ok {
+		if _, ok := cm[k]; ok {
 			cm[k] = true
 		} else {
 			delete(ri.DeletedChunks, k)
@@ -48,5 +57,8 @@ func fsckRemote(config Config) {
 		}
 	}
 
-	ri.UploadRemote()
+	if err := ri.UploadRemote(ctx); err != nil {
+		return err
+	}
+	return errs
 }

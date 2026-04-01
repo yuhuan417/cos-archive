@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 )
@@ -16,6 +17,7 @@ type Config struct {
 	TargetDir  string
 	Index      string
 	Port       string
+	RestoreQPS int
 	COS        COSConfig
 }
 
@@ -29,99 +31,122 @@ type COSConfig struct {
 	Retries     int
 }
 
-func getConfig(configFileName string) (config Config) {
-	// default value
+func getConfig(configFileName string) (Config, error) {
+	config := Config{}
 	config.Threads = 4
 	config.Index = "meta.json"
+	config.RestoreQPS = 90
 	config.COS.ChunkPrefix = "data/"
 	config.COS.Class = "DEEP_ARCHIVE"
 	config.COS.Retries = 1
 
 	jsonFile, err := os.Open(configFileName)
-
 	if err != nil {
-		Fatal("Open config file error:", err)
+		return config, fmt.Errorf("%w: open config file: %v", ErrConfigInvalid, err)
 	}
-
 	defer jsonFile.Close()
 
 	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
-		Fatal("Read config file error:", err)
+		return config, fmt.Errorf("%w: read config file: %v", ErrConfigInvalid, err)
 	}
 	if err := json.Unmarshal(byteValue, &config); err != nil {
-		Fatal("Parse config file error:", err)
+		return config, fmt.Errorf("%w: parse config file: %v", ErrConfigInvalid, err)
 	}
 
-	return
+	return config, nil
 }
 
-func validateConfig(action string, config Config) {
+func validateConfig(action string, config Config) error {
 	switch action {
 	case "backup":
-		validateWorkingDir(config)
-		validateFilePaths(config)
-		validateThreads(config)
-		validateCOSConfig(config)
-	case "restore":
-		validateCOSConfig(config)
-	case "download":
-		validateWorkingDir(config)
-		validateTargetDir(config)
-		validateCOSConfig(config)
-	case "browse":
-		validateTargetDir(config)
-		if config.Port == "" {
-			Fatal("Empty port.")
+		if err := validateWorkingDir(config); err != nil {
+			return err
 		}
+		if err := validateFilePaths(config); err != nil {
+			return err
+		}
+		if err := validateThreads(config); err != nil {
+			return err
+		}
+		return validateCOSConfig(config)
+	case "restore":
+		return validateCOSConfig(config)
+	case "download":
+		if err := validateWorkingDir(config); err != nil {
+			return err
+		}
+		if err := validateTargetDir(config); err != nil {
+			return err
+		}
+		return validateCOSConfig(config)
+	case "browse":
+		if err := validateTargetDir(config); err != nil {
+			return err
+		}
+		if config.Port == "" {
+			return fmt.Errorf("%w: empty port", ErrConfigInvalid)
+		}
+		return nil
 	case "link":
-		validateTargetDir(config)
+		return validateTargetDir(config)
 	case "fsck":
-		validateWorkingDir(config)
-		validateCOSConfig(config)
+		if err := validateWorkingDir(config); err != nil {
+			return err
+		}
+		return validateCOSConfig(config)
 	case "verify":
-		validateWorkingDir(config)
-		validateFilePaths(config)
-		validateCOSConfig(config)
+		if err := validateWorkingDir(config); err != nil {
+			return err
+		}
+		if err := validateFilePaths(config); err != nil {
+			return err
+		}
+		return validateCOSConfig(config)
 	case "":
-		Fatal("Empty action.")
+		return fmt.Errorf("%w: empty action", ErrUnknownAction)
 	default:
-		Fatal("Unknown action:", action)
+		return fmt.Errorf("%w: %s", ErrUnknownAction, action)
 	}
 }
 
-func validateWorkingDir(config Config) {
+func validateWorkingDir(config Config) error {
 	if config.WorkingDir == "" {
-		Fatal("Empty working dir.")
+		return fmt.Errorf("%w: empty working dir", ErrConfigInvalid)
 	}
+	return nil
 }
 
-func validateTargetDir(config Config) {
+func validateTargetDir(config Config) error {
 	if config.TargetDir == "" {
-		Fatal("Empty target dir.")
+		return fmt.Errorf("%w: empty target dir", ErrConfigInvalid)
 	}
+	return nil
 }
 
-func validateFilePaths(config Config) {
+func validateFilePaths(config Config) error {
 	if len(config.FilePaths) == 0 {
-		Fatal("Empty file paths.")
+		return fmt.Errorf("%w: empty file paths", ErrConfigInvalid)
 	}
+	return nil
 }
 
-func validateThreads(config Config) {
+func validateThreads(config Config) error {
 	if config.Threads <= 0 {
-		Fatal("Invalid threads:", config.Threads)
+		return fmt.Errorf("%w: invalid threads %d", ErrConfigInvalid, config.Threads)
 	}
+	return nil
 }
 
-func validateCOSConfig(config Config) {
+func validateCOSConfig(config Config) error {
 	if config.COS.URL == "" {
-		Fatal("Empty COS URL.")
+		return fmt.Errorf("%w: empty COS URL", ErrConfigInvalid)
 	}
 	if config.COS.ID == "" {
-		Fatal("Empty COS ID.")
+		return fmt.Errorf("%w: empty COS ID", ErrConfigInvalid)
 	}
 	if config.COS.Key == "" {
-		Fatal("Empty COS key.")
+		return fmt.Errorf("%w: empty COS key", ErrConfigInvalid)
 	}
+	return nil
 }

@@ -15,11 +15,12 @@ COS-Archive 是一个基于 Go 语言开发的增量归档备份工具，专为 
 
 ## 技术栈
 
-- **语言**：Go 1.21+
+- **语言**：Go 1.25+
 - **主要依赖**：
   - `github.com/tencentyun/cos-go-sdk-v5`：腾讯云 COS SDK
   - `github.com/dustin/go-humanize`：文件大小人性化显示
   - `go.uber.org/ratelimit`：速率限制
+  - `golang.org/x/sync/errgroup`：并发任务收口
   - `github.com/allan-simon/go-singleinstance`：单实例锁
 
 ## 项目结构
@@ -27,6 +28,7 @@ COS-Archive 是一个基于 Go 语言开发的增量归档备份工具，专为 
 ```
 cos-archive/
 ├── main.go          # 程序入口点
+├── errors.go        # 统一错误类型
 ├── config.go        # 配置结构定义
 ├── backup.go        # 备份逻辑实现
 ├── restore.go       # 恢复逻辑实现
@@ -36,8 +38,13 @@ cos-archive/
 ├── fsck.go          # 一致性检查
 ├── verify.go        # 验证功能
 ├── index.go         # 索引管理
+├── scanner.go       # 本地目录扫描
+├── types.go         # 核心数据类型
 ├── chunk.go         # 分块处理
 ├── cos.go           # COS 接口封装
+├── progress.go      # 进度日志
+├── templates/       # browse HTML 模板
+├── *_test.go        # 最小回归测试
 ├── config.json      # 配置文件示例
 └── go.mod           # Go 模块定义
 ```
@@ -88,6 +95,7 @@ go build -o cos-archive
     "WorkingDir": "/var/lib/cos-archive/work",
     "TargetDir": "/var/lib/cos-archive/restore-cache",
     "Threads": 4,
+    "RestoreQPS": 90,
     "Port": "3389",
     "COS": {
         "URL": "https://example-1250000000.cos.ap-region.myqcloud.com",
@@ -107,6 +115,7 @@ go build -o cos-archive
 - `WorkingDir`：工作目录，保存锁文件和远端索引缓存
 - `TargetDir`：下载 chunk、浏览索引和恢复目录的目标路径
 - `Threads`：上传线程数（默认 4）
+- `RestoreQPS`：发起解冻请求时的限速值（默认 90）
 - `Port`：服务端口（用于浏览功能）
 - `COS.URL`：腾讯云 COS 访问地址
 - `COS.ID`：腾讯云访问密钥 ID
@@ -172,7 +181,8 @@ go build -o cos-archive
 3. 构建本地和远程的块映射表 `localChunkMap` 和 `remoteChunkMap`
 4. 并发上传缺失的文件块到云端存储
 5. 标记远程存在但本地不存在的块为待删除（7天后执行）
-6. 上传新的索引文件到云端
+6. 输出周期性上传进度
+7. 上传新的索引文件到云端
 
 ### 一致性检查 (fsck.go)
 
@@ -218,8 +228,8 @@ go build -o cos-archive
 ## 开发约定
 
 - 使用 Go 标准格式化工具
-- 错误处理使用项目内的 `Fatal` 包装统一退出
-- 并发处理使用 sync.WaitGroup
+- 业务逻辑优先返回 error，由 `main.go` 统一退出
+- 并发处理使用 `errgroup`
 - 文件路径使用 path.Join 进行跨平台兼容
 - 配置项提供合理的默认值
 
@@ -230,5 +240,4 @@ go build -o cos-archive
 - 删除候选默认先标记 7 天，但实际删除不会早于 180 天最低计费期
 - 首次运行会进行全量备份
 - 索引文件存储在云端，不进行归档级别存储
-
 

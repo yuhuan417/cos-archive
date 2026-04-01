@@ -1,43 +1,51 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"golang.org/x/sync/errgroup"
 )
 
 // UploadCTX struct
 type UploadCTX struct {
 	localPath  string
 	remotePath string
+	size       int64
 }
 
-func uploadPayload(c *COS, config Config, ctx UploadCTX) {
-	rp := path.Join(config.COS.ChunkPrefix, ctx.remotePath)
+func uploadPayload(ctx context.Context, c *COS, config Config, uploadCtx UploadCTX) error {
+	rp := path.Join(config.COS.ChunkPrefix, uploadCtx.remotePath)
 
-	header := c.GetHeader(rp)
+	header, err := c.GetHeader(ctx, rp)
+	if err != nil {
+		return err
+	}
 	if header != nil {
-		slog.Debug("File already exists", "ctx", ctx, "remotePath", rp)
-		return
+		slog.Debug("File already exists", "ctx", uploadCtx, "remotePath", rp)
+		return nil
 	}
 
-	err := c.UploadFile(rp, ctx.localPath, config.COS.Class, nil)
+	err = c.UploadFile(ctx, rp, uploadCtx.localPath, config.COS.Class, nil)
 	if err != nil {
 		if os.IsNotExist(err) {
-			slog.Debug("Local file does not exist", "ctx", ctx, "error", err)
-		} else {
-			Fatal("Upload file error:", ctx, err)
+			slog.Debug("Local file does not exist", "ctx", uploadCtx, "error", err)
+			return nil
 		}
+		return fmt.Errorf("upload %s: %w", uploadCtx.localPath, err)
 	}
-	slog.Debug("Uploaded file", "localPath", ctx.localPath)
+	slog.Debug("Uploaded file", "localPath", uploadCtx.localPath)
+	return nil
 }
 
-func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
+func uploadFiles(ctx context.Context, c *COS, config Config, localIndex *Index, remoteIndex *Index) error {
 	deleteTime := time.Now().AddDate(0, 0, 7).Unix()
 	remoteChunkMap := buildChunksMap(*remoteIndex)
 	remoteIndex.Entries.Files = nil
@@ -53,54 +61,57 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 		localIndex.DeletedChunks[k] = v
 	}
 
-	wg := &sync.WaitGroup{}
-	ch := make(chan UploadCTX, config.Threads)
-
 	cnt := 0
 	uploadSize := int64(0)
 	totalSize := int64(0)
+	tasks := make([]UploadCTX, 0)
 
-	uploadFile := func(id int) {
-		defer wg.Done()
-		c := NewCOS(config.COS)
-		for ctx := range ch {
-			uploadPayload(c, config, ctx)
-		}
-	}
-	wg.Add(config.Threads)
-	for i := 0; i < config.Threads; i++ {
-		go uploadFile(i)
-	}
 	for fp, fi := range localIndex.Entries.Files {
 		h := ChunkKey{fi.Size, fi.Hash}
-		// 检查相同的chunk是否已经处理过
-		lc := localChunkMap[h]
-		if lc {
+		if localChunkMap[h] {
 			continue
 		}
 
-		totalSize = totalSize + fi.Size
+		totalSize += fi.Size
 		localChunkMap[h] = true
-		_, ok := remoteChunkMap[h]
-		if ok {
+		if _, ok := remoteChunkMap[h]; ok {
 			remoteChunkMap[h] = true
 		} else {
-			// 需要上传
-			ctx := new(UploadCTX)
-			ctx.localPath = fp
-			ctx.remotePath = chunkPath(h)
-			cnt = cnt + 1
-			uploadSize = uploadSize + fi.Size
-			ch <- *ctx
+			uploadCtx := UploadCTX{
+				localPath:  fp,
+				remotePath: chunkPath(h),
+				size:       fi.Size,
+			}
+			cnt++
+			uploadSize += fi.Size
+			tasks = append(tasks, uploadCtx)
 		}
-		_, ok = localIndex.DeletedChunks[h]
-		if ok {
+		if _, ok := localIndex.DeletedChunks[h]; ok {
 			delete(localIndex.DeletedChunks, h)
 		}
 	}
 
-	close(ch)
-	wg.Wait()
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(config.Threads)
+	var processed atomic.Int64
+	var processedBytes atomic.Int64
+	stopProgress := startProgressLogger(gctx, "Upload progress", int64(len(tasks)), uploadSize, &processed, &processedBytes)
+	for _, uploadCtx := range tasks {
+		uploadCtx := uploadCtx
+		g.Go(func() error {
+			if err := uploadPayload(gctx, c, config, uploadCtx); err != nil {
+				return err
+			}
+			processed.Add(1)
+			processedBytes.Add(uploadCtx.size)
+			return nil
+		})
+	}
+	err := g.Wait()
+	stopProgress()
+	if err != nil {
+		return err
+	}
 
 	slog.Info("Uploaded files", "count", cnt, "size", humanize.IBytes(uint64(uploadSize)))
 	slog.Info("Total chunk size", "size", humanize.IBytes(uint64(totalSize)))
@@ -110,25 +121,28 @@ func uploadFiles(config Config, localIndex *Index, remoteIndex *Index) {
 			localIndex.DeletedChunks[k] = deleteTime
 		}
 	}
-	localIndex.DeleteOutdatedChunks()
+	return localIndex.DeleteOutdatedChunks(ctx)
 }
 
-func backupFiles(config Config) {
-	// if needFSCK() {
-	// 	fsckRemote(config)
-	// }
-	remoteIndex := NewIndex(config)
-	err := remoteIndex.LoadRemote()
+func backupFiles(ctx context.Context, config Config) error {
+	c, err := NewCOS(config.COS)
+	if err != nil {
+		return err
+	}
+	remoteIndex := NewIndex(config, c)
+	err = remoteIndex.LoadRemote(ctx)
 	if err != nil && !errors.Is(err, ErrIndexNotFound) {
-		Fatal("Can't load remote index:", err)
+		return fmt.Errorf("load remote index: %w", err)
 	}
 	if errors.Is(err, ErrIndexNotFound) {
 		slog.Info("Remote index not found, starting fresh backup")
 	}
 
-	localIndex := NewIndex(config)
+	localIndex := NewIndex(config, c)
 	localIndex.GenerateLocal(remoteIndex)
 
-	uploadFiles(config, localIndex, remoteIndex)
-	localIndex.UploadRemote()
+	if err := uploadFiles(ctx, c, config, localIndex, remoteIndex); err != nil {
+		return err
+	}
+	return localIndex.UploadRemote(ctx)
 }

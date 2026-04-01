@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
+	"embed"
 	"fmt"
-	"log/slog"
+	"html/template"
 	"net/http"
 	"net/url"
 	"path"
@@ -11,189 +13,184 @@ import (
 	"time"
 )
 
+//go:embed templates/*.html
+var templateFS embed.FS
+
+var browseTemplates = template.Must(template.ParseFS(templateFS, "templates/*.html"))
+
 // DirMap for browse
 type DirMap = map[string]DirEnt
 
-// NewDirEnt ...
-func NewDirEnt() *DirEnt {
-	d := DirEnt{}
-	d.Files = make(FileInfoMap)
-	d.Dirs = make(DirInfoMap)
-	d.Links = make(LinkInfoMap)
-	return &d
+type dirListItem struct {
+	Href     string
+	Name     string
+	Mode     string
+	Size     int64
+	Modified string
 }
 
-func handleDir(m DirEnt, p string, w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "no-sniff")
-	fmt.Fprintf(w, `
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<title>Directory listing for %s</title>
-</head>
-<body>
-<h1>Directory listing for %s</h1>
-<hr>
-<table style="float:left" border="1">
-  <thead>
-    <tr>
-      <th>Filename</th>
-      <th>Mode</th>
-      <th>Size <small>(bytes)</small></th>
-      <th>Date Modified</th>
-    </tr>
-  </thead>
-  <tbody>
-`, p, p)
+type dirPageData struct {
+	Path  string
+	Items []dirListItem
+}
+
+type filePageData struct {
+	Path     string
+	CloudURL string
+}
+
+type linkPageData struct {
+	Path   string
+	LinkTo string
+}
+
+func directoryItems(m DirEnt) []dirListItem {
+	items := make([]dirListItem, 0, len(m.Dirs)+len(m.Files)+len(m.Links))
 
 	keys := make([]string, 0, len(m.Dirs))
 	for k := range m.Dirs {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-
 	for _, k := range keys {
 		fi := m.Dirs[k]
-		alink := url.PathEscape(k) + "/"
-		bn := k + "/"
-		fmt.Fprintf(w, `
-      <tr>
-        <td><a href="%s">%s</a></td>
-        <td>%s</td>
-        <td>%d</td>
-        <td>%s</td>
-      </tr>`, alink, bn, fi.Mode.String(), 0, time.Now().String())
+		items = append(items, dirListItem{
+			Href:     url.PathEscape(k) + "/",
+			Name:     k + "/",
+			Mode:     fi.Mode.String(),
+			Size:     0,
+			Modified: "",
+		})
 	}
+
 	keys = make([]string, 0, len(m.Files))
 	for k := range m.Files {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-
 	for _, k := range keys {
 		fi := m.Files[k]
-		alink := url.PathEscape(k)
-		bn := k
-		fmt.Fprintf(w, `
-      <tr>
-        <td><a href="%s">%s</a></td>
-        <td>%s</td>
-        <td>%d</td>
-        <td>%s</td>
-      </tr>`, alink, bn, fi.Mode.String(), fi.Size, time.Unix(fi.ModTime, 0).String())
+		items = append(items, dirListItem{
+			Href:     url.PathEscape(k),
+			Name:     k,
+			Mode:     fi.Mode.String(),
+			Size:     fi.Size,
+			Modified: time.Unix(fi.ModTime, 0).String(),
+		})
 	}
+
 	keys = make([]string, 0, len(m.Links))
 	for k := range m.Links {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-
 	for _, k := range keys {
-		alink := url.PathEscape(k)
-		bn := k
-		fmt.Fprintf(w, `
-      <tr>
-        <td><a href="%s">%s</a></td>
-        <td>%s</td>
-        <td>%d</td>
-        <td>%s</td>
-      </tr>`, alink, bn, "", 0, time.Now().String())
+		items = append(items, dirListItem{
+			Href:     url.PathEscape(k),
+			Name:     k,
+			Mode:     "",
+			Size:     0,
+			Modified: "",
+		})
 	}
-	fmt.Fprintf(w, `
-</tbody>
-</table>
-</body>
-</html>`)
+
+	return items
 }
 
-func handleFile(config Config, fi *FileInfo, p string, w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "no-sniff")
-	fmt.Fprintf(w, `
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<title>File %s</title>
-</head>
-<body>`, p)
-
-	u, _ := url.Parse(config.COS.URL)
+func buildCloudURL(config Config, fi *FileInfo) string {
+	if config.COS.URL == "" {
+		return ""
+	}
+	u, err := url.Parse(config.COS.URL)
+	if err != nil {
+		return ""
+	}
 	u.Path = path.Join(u.Path, config.COS.ChunkPrefix, chunkPath(ChunkKey{fi.Size, fi.Hash}))
-	s := u.String()
-	fmt.Fprintf(w, "%s on cloud: %s", p, s)
-	fmt.Fprintf(w, "</body></html>")
+	return u.String()
 }
 
-func handleLink(config Config, fi *LinkInfo, p string, w http.ResponseWriter, r *http.Request) {
+func renderDir(m DirEnt, p string, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "no-sniff")
-	fmt.Fprintf(w, `
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<title>File %s</title>
-</head>
-<body>`, p)
+	return browseTemplates.ExecuteTemplate(w, "dir.html", dirPageData{
+		Path:  p,
+		Items: directoryItems(m),
+	})
+}
 
-	fmt.Fprintf(w, "%s links to %s", p, fi.LinkTo)
-	fmt.Fprintf(w, "</body></html>")
+func renderFile(config Config, fi *FileInfo, p string, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "no-sniff")
+	return browseTemplates.ExecuteTemplate(w, "file.html", filePageData{
+		Path:     p,
+		CloudURL: buildCloudURL(config, fi),
+	})
+}
+
+func renderLink(fi *LinkInfo, p string, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "no-sniff")
+	return browseTemplates.ExecuteTemplate(w, "link.html", linkPageData{
+		Path:   p,
+		LinkTo: fi.LinkTo,
+	})
 }
 
 func browseHandler(config Config, entries DirEnt, dm DirMap) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p, _ := url.PathUnescape(r.URL.Path)
+		p, err := url.PathUnescape(r.URL.Path)
+		if err != nil {
+			http.Error(w, "bad path", http.StatusBadRequest)
+			return
+		}
 		p = strings.TrimSuffix(p, "/")
 		if p == "" {
 			p = "/"
 		}
 
-		m, ok := dm[p]
-		if ok {
-			handleDir(m, p, w, r)
+		if m, ok := dm[p]; ok {
+			if err := renderDir(m, p, w); err != nil {
+				http.Error(w, fmt.Sprintf("render dir: %v", err), http.StatusInternalServerError)
+			}
 			return
 		}
 
 		if fi, ok := entries.Files[p]; ok {
-			handleFile(config, fi, p, w, r)
+			if err := renderFile(config, fi, p, w); err != nil {
+				http.Error(w, fmt.Sprintf("render file: %v", err), http.StatusInternalServerError)
+			}
 			return
 		}
 		if fi, ok := entries.Links[p]; ok {
-			handleLink(config, fi, p, w, r)
+			if err := renderLink(fi, p, w); err != nil {
+				http.Error(w, fmt.Sprintf("render link: %v", err), http.StatusInternalServerError)
+			}
 			return
 		}
 		http.Error(w, "404 not found.", http.StatusNotFound)
 	})
 }
 
-func loadBrowseIndex(config Config) *Index {
-	if config.TargetDir == "" {
-		Fatal("Empty target dir.")
-	}
-	index := NewIndex(config)
+func loadBrowseIndex(config Config) (*Index, error) {
+	index := NewIndex(config, nil)
 	paths := []string{
 		path.Join(config.TargetDir, config.Index+".remote"),
 		path.Join(config.TargetDir, config.Index),
 	}
 	for _, p := range paths {
 		if err := index.Load(p); err == nil {
-			return index
+			return index, nil
 		}
 	}
-	Fatal("Can't load browse index from target dir.")
-	return nil
+	return nil, fmt.Errorf("can't load browse index from target dir")
 }
 
-func browseFiles(config Config) {
-	index := loadBrowseIndex(config)
+func buildDirMap(entries DirEnt) DirMap {
 	dm := make(DirMap)
-	for fp, fi := range index.Entries.Files {
+	for fp, fi := range entries.Files {
 		dp := path.Dir(fp)
 		bn := path.Base(fp)
-		if _, ok := index.Entries.Dirs[dp]; !ok {
+		if _, ok := entries.Dirs[dp]; !ok {
 			dp = "/"
 			bn = fp
 		}
@@ -203,10 +200,10 @@ func browseFiles(config Config) {
 		}
 		dm[dp].Files[bn] = fi
 	}
-	for fp, fi := range index.Entries.Dirs {
+	for fp, fi := range entries.Dirs {
 		dp := path.Dir(fp)
 		bn := path.Base(fp)
-		if _, ok := index.Entries.Dirs[dp]; !ok {
+		if _, ok := entries.Dirs[dp]; !ok {
 			dp = "/"
 			bn = fp
 		}
@@ -216,10 +213,10 @@ func browseFiles(config Config) {
 		}
 		dm[dp].Dirs[bn] = fi
 	}
-	for fp, fi := range index.Entries.Links {
+	for fp, fi := range entries.Links {
 		dp := path.Dir(fp)
 		bn := path.Base(fp)
-		if _, ok := index.Entries.Dirs[dp]; !ok {
+		if _, ok := entries.Dirs[dp]; !ok {
 			dp = "/"
 			bn = fp
 		}
@@ -229,8 +226,33 @@ func browseFiles(config Config) {
 		}
 		dm[dp].Links[bn] = fi
 	}
+	return dm
+}
 
-	http.Handle("/", browseHandler(config, index.Entries, dm))
-	slog.Debug("Server started", "port", config.Port)
-	Fatal(http.ListenAndServe(":"+config.Port, nil))
+func browseFiles(ctx context.Context, config Config) error {
+	index, err := loadBrowseIndex(config)
+	if err != nil {
+		return err
+	}
+	dm := buildDirMap(index.Entries)
+
+	mux := http.NewServeMux()
+	mux.Handle("/", browseHandler(config, index.Entries, dm))
+	server := &http.Server{
+		Addr:    ":" + config.Port,
+		Handler: mux,
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
+	}()
+
+	err = server.ListenAndServe()
+	if err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }

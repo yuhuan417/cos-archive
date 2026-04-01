@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"log/slog"
 	"os"
+	"os/signal"
 	"path"
+	"syscall"
 
 	"github.com/allan-simon/go-singleinstance"
 )
@@ -15,11 +17,18 @@ func main() {
 	verbose := flag.Bool("verbose", false, "enable verbose output")
 	flag.Parse()
 
-	// 初始化日志系统
 	InitLogger(*verbose)
 
-	config := getConfig(*configPath)
-	validateConfig(*action, config)
+	config, err := getConfig(*configPath)
+	if err != nil {
+		Fatal(err)
+	}
+	if err := validateConfig(*action, config); err != nil {
+		Fatal(err)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
 	if *action != "browse" {
 		lockPath := getLockFilePath(config)
@@ -33,34 +42,32 @@ func main() {
 		defer lockFile.Close()
 	}
 
-	switch *action {
-	case "browse":
-		slog.Info("Action: browse")
-		browseFiles(config)
-	case "restore":
-		slog.Info("Action: restore")
-		restoreFiles(config)
-	case "download":
-		slog.Info("Action: download")
-		downloadFiles(config)
-	case "link":
-		slog.Info("Action: link")
-		linkFiles(config)
-	case "backup":
-		slog.Info("Action: backup")
-		backupFiles(config)
-	case "fsck":
-		slog.Info("Action: fsck")
-		fsckRemote(config)
-	case "verify":
-		slog.Info("Action: verify")
-		verifyFiles(config)
-	default:
-		Fatal("Unknown action:", *action)
+	if err := runAction(ctx, *action, config); err != nil {
+		Fatal(err)
 	}
 
-	// 在程序结束时输出调试信息（非 verbose 模式）
 	PrintDebugDetails()
+}
+
+func runAction(ctx context.Context, action string, config Config) error {
+	switch action {
+	case "browse":
+		return browseFiles(ctx, config)
+	case "restore":
+		return restoreFiles(ctx, config)
+	case "download":
+		return downloadFiles(ctx, config)
+	case "link":
+		return linkFiles(ctx, config)
+	case "backup":
+		return backupFiles(ctx, config)
+	case "fsck":
+		return fsckRemote(ctx, config)
+	case "verify":
+		return verifyFiles(ctx, config)
+	default:
+		return ErrUnknownAction
+	}
 }
 
 func getLockFilePath(config Config) string {

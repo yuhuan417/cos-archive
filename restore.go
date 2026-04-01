@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"path"
 
@@ -8,43 +10,62 @@ import (
 	"go.uber.org/ratelimit"
 )
 
-func logRestoreStatus(err error) {
+func classifyRestoreError(err error) error {
 	if err == nil {
-		return
+		return nil
 	}
 	if cos.IsNotFoundError(err) {
-		// WARN
-		slog.Debug("WARN: Resource does not exist")
-	} else if e, ok := cos.IsCOSError(err); ok {
-		if e.Code == "RestoreAlreadyInProgress" {
-			return
-		}
-		slog.Error("ERROR", "code", e.Code)
-		slog.Error("ERROR", "message", e.Message)
-		slog.Error("ERROR", "resource", e.Resource)
-		slog.Error("ERROR", "requestId", e.RequestID)
-		// ERROR
-	} else {
-		slog.Error("ERROR", "error", err)
-		// ERROR
+		slog.Debug("Restore target does not exist")
+		return nil
 	}
+	if e, ok := cos.IsCOSError(err); ok {
+		if e.Code == "RestoreAlreadyInProgress" {
+			return ErrRestorePending
+		}
+		slog.Error("Restore error", "code", e.Code, "message", e.Message, "resource", e.Resource, "requestId", e.RequestID)
+		return err
+	}
+	slog.Error("Restore error", "error", err)
+	return err
 }
 
-func restoreChunk(config Config, cm ChunksMap) {
+func restoreChunk(ctx context.Context, c *COS, config Config, cm ChunksMap) error {
 	slog.Debug("Restoring chunks")
-	// Download chunk from map
-	rl := ratelimit.New(90) // per second, hardcode.
-	c := NewCOS(config.COS)
+	qps := config.RestoreQPS
+	if qps <= 0 {
+		qps = 90
+	}
+	rl := ratelimit.New(qps)
+	var errs error
 
 	for k := range cm {
+		select {
+		case <-ctx.Done():
+			return errors.Join(errs, ctx.Err())
+		default:
+		}
 		rl.Take()
 		p := path.Join(config.COS.ChunkPrefix, chunkPath(k))
-		err := c.RestoreFile(p)
-		logRestoreStatus(err)
+		err := classifyRestoreError(c.RestoreFile(ctx, p))
+		if errors.Is(err, ErrRestorePending) {
+			slog.Debug("Restore already in progress", "path", p)
+			continue
+		}
+		if err != nil {
+			errs = errors.Join(errs, err)
+		}
 	}
+	return errs
 }
 
-func restoreFiles(config Config) {
-	cm := scanRemoteChunksMap(config)
-	restoreChunk(config, cm)
+func restoreFiles(ctx context.Context, config Config) error {
+	c, err := NewCOS(config.COS)
+	if err != nil {
+		return err
+	}
+	cm, err := scanRemoteChunksMap(ctx, c, config)
+	if err != nil {
+		return err
+	}
+	return restoreChunk(ctx, c, config, cm)
 }

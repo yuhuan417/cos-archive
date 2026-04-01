@@ -1,6 +1,6 @@
 module cos-archive
 
-go 1.21
+go 1.25.0
 
 require (
 	github.com/allan-simon/go-singleinstance v0.0.0-20210120080615-d0997106ab37
@@ -8,6 +8,7 @@ require (
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.24
 	github.com/ugorji/go/codec v1.2.5
 	go.uber.org/ratelimit v0.2.0
+	golang.org/x/sync v0.20.0
 )
 
 require (

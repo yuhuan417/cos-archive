@@ -1,0 +1,31 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Directory listing for {{ .Path }}</title>
+</head>
+<body>
+<h1>Directory listing for {{ .Path }}</h1>
+<hr>
+<table style="float:left" border="1">
+  <thead>
+    <tr>
+      <th>Filename</th>
+      <th>Mode</th>
+      <th>Size <small>(bytes)</small></th>
+      <th>Date Modified</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{ range .Items }}
+    <tr>
+      <td><a href="{{ .Href }}">{{ .Name }}</a></td>
+      <td>{{ .Mode }}</td>
+      <td>{{ .Size }}</td>
+      <td>{{ .Modified }}</td>
+    </tr>
+  {{ end }}
+  </tbody>
+</table>
+</body>
+</html>

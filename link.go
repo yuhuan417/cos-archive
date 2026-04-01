@@ -1,63 +1,50 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path"
 	"time"
 )
 
-func linkFiles(config Config) {
-	if config.TargetDir == "" {
-		Fatal("Empty target dir.")
-	}
-	// index path
+func linkFiles(_ context.Context, config Config) error {
 	riPath := path.Join(config.TargetDir, config.Index+".remote")
-	ri := NewIndex(config)
-	err := ri.Load(riPath)
-	if err != nil {
-		Fatal("Can't load index:", riPath, err)
+	ri := NewIndex(config, nil)
+	if err := ri.Load(riPath); err != nil {
+		return err
 	}
 
-	// chunk path
 	chunksPath := path.Join(config.TargetDir, "chunks")
-
-	// linking path
 	linkPath := path.Join(config.TargetDir, "restore")
 	for fp, fi := range ri.Entries.Dirs {
 		targetPath := path.Join(linkPath, fp)
-		err := os.MkdirAll(targetPath, fi.Mode)
-		if err != nil {
-			Fatal("MkdirAll error:", targetPath, err)
+		if err := os.MkdirAll(targetPath, fi.Mode); err != nil {
+			return err
 		}
 	}
 
 	for fp, fi := range ri.Entries.Links {
 		targetPath := path.Join(linkPath, fp)
-		err := os.Symlink(fi.LinkTo, targetPath)
-		if err != nil {
-			Fatal("Symlink error:", targetPath, fi.LinkTo, err)
+		if err := os.Symlink(fi.LinkTo, targetPath); err != nil {
+			return err
 		}
-		continue
 	}
 
 	for fp, fi := range ri.Entries.Files {
 		targetPath := path.Join(linkPath, fp)
 		k := chunkPath(ChunkKey{fi.Size, fi.Hash})
 		lp := path.Join(chunksPath, k[len(k)-2:], k)
-		err := os.Link(lp, targetPath)
-		if err != nil {
-			Fatal("Link error:", targetPath, lp, err)
+		if err := os.Link(lp, targetPath); err != nil {
+			return err
 		}
-		err = os.Chmod(targetPath, fi.Mode)
-		if err != nil {
-			Fatal("Chmod error:", targetPath, err)
+		if err := os.Chmod(targetPath, fi.Mode); err != nil {
+			return err
 		}
 		now := time.Now()
 		mtime := time.Unix(fi.ModTime, 0)
-
-		err = os.Chtimes(targetPath, now, mtime)
-		if err != nil {
-			Fatal("Chtimes error:", targetPath, err)
+		if err := os.Chtimes(targetPath, now, mtime); err != nil {
+			return err
 		}
 	}
+	return nil
 }

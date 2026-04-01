@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -15,47 +15,6 @@ import (
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
-// ChunkKey in memory
-type ChunkKey struct {
-	size int64
-	hash HashType // sha1
-}
-
-// ChunksMap struct
-type ChunksMap = map[ChunkKey]bool
-
-func parseInt64FromBytes(b []byte) int64 {
-	r := int64(0)
-	for _, i := range b {
-		r = r*10 + int64(i-'0')
-	}
-	return r
-}
-
-// UnmarshalText decode ChunkKey from json
-func (k *ChunkKey) UnmarshalText(text []byte) error {
-	*k = ChunkKey{}
-	c := bytes.Split(text, []byte("-"))
-	if len(c) == 2 {
-		k.size = parseInt64FromBytes(c[0])
-		err := k.hash.UnmarshalText(c[1])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// MarshalText encode ChunkKey to json
-func (k ChunkKey) MarshalText() ([]byte, error) {
-	b := []byte("")
-	b = strconv.AppendInt(b, k.size, 10)
-	b = append(b, '-')
-	h, _ := k.hash.MarshalText()
-	b = append(b, h...)
-	return b, nil
-}
-
 func buildChunksMap(index Index) ChunksMap {
 	chunksMap := make(ChunksMap)
 	for _, fi := range index.Entries.Files {
@@ -64,16 +23,18 @@ func buildChunksMap(index Index) ChunksMap {
 	return chunksMap
 }
 
-func scanRemoteChunksMap(config Config) ChunksMap {
+func scanRemoteChunksMap(ctx context.Context, c *COS, config Config) (ChunksMap, error) {
 	slog.Debug("Scan remote chunks")
 	cm := make(ChunksMap)
-	c := NewCOS(config.COS)
-	c.ScanFiles(config.COS.ChunkPrefix, func(obj cos.Object) {
+	err := c.ScanFiles(ctx, config.COS.ChunkPrefix, func(obj cos.Object) {
 		p := filepath.Clean(config.COS.ChunkPrefix) + "/"
 		k := parseChunkKeyFromString(strings.TrimPrefix(obj.Key, p))
 		cm[k] = false
 	})
-	return cm
+	if err != nil {
+		return nil, err
+	}
+	return cm, nil
 }
 
 func chunkPath(k ChunkKey) string {
@@ -96,7 +57,6 @@ func parseChunkKeyFromString(s string) ChunkKey {
 }
 
 func chunkHash(path string, size int64) (HashType, error) {
-	// xunlei hash
 	h := sha1.New()
 	f, err := os.Open(path)
 	if err != nil {
