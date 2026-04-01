@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"os"
 	"os/signal"
 	"path"
@@ -11,67 +12,97 @@ import (
 	"github.com/allan-simon/go-singleinstance"
 )
 
+var (
+	browseFilesFunc       = browseFiles
+	restoreFilesFunc      = restoreFiles
+	downloadFilesFunc     = downloadFiles
+	linkFilesFunc         = linkFiles
+	mountFilesFunc        = mountFiles
+	backupFilesFunc       = backupFiles
+	fsckRemoteFunc        = fsckRemote
+	verifyFilesFunc       = verifyFiles
+	initLoggerFunc        = InitLogger
+	getConfigFunc         = getConfig
+	validateConfigFunc    = validateConfig
+	notifyContextFunc     = signal.NotifyContext
+	mkdirAllFunc          = os.MkdirAll
+	createLockFileFunc    = func(lockPath string) (io.Closer, error) { return singleinstance.CreateLockFile(lockPath) }
+	printDebugDetailsFunc = PrintDebugDetails
+)
+
 func main() {
-	action := flag.String("action", "backup", "a string")
-	configPath := flag.String("config", "config.json", "a string")
-	targetDir := flag.String("target", "", "override target dir")
-	mountPoint := flag.String("mountpoint", "", "override mount point")
-	verbose := flag.Bool("verbose", false, "enable verbose output")
-	flag.Parse()
-
-	InitLogger(*verbose)
-
-	config, err := getConfig(*configPath)
-	if err != nil {
+	if err := runMain(os.Args[1:]); err != nil {
 		Fatal(err)
+	}
+	printDebugDetailsFunc()
+}
+
+func runMain(args []string) error {
+	flags := flag.NewFlagSet("cos-archive", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+
+	action := flags.String("action", "backup", "a string")
+	configPath := flags.String("config", "config.json", "a string")
+	targetDir := flags.String("target", "", "override target dir")
+	mountPoint := flags.String("mountpoint", "", "override mount point")
+	verbose := flags.Bool("verbose", false, "enable verbose output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	initLoggerFunc(*verbose)
+
+	config, err := getConfigFunc(*configPath)
+	if err != nil {
+		return err
 	}
 	config = applyRuntimeOverrides(config, *targetDir, *mountPoint)
-	if err := validateConfig(*action, config); err != nil {
-		Fatal(err)
+	if err := validateConfigFunc(*action, config); err != nil {
+		return err
 	}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := notifyContextFunc(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	var lockFile io.Closer
 	if *action != "browse" {
 		if *action != "mount" {
 			lockPath := getLockFilePath(config)
-			if err := os.MkdirAll(path.Dir(lockPath), 0755); err != nil {
-				Fatal("Create lock dir error:", err)
+			if err := mkdirAllFunc(path.Dir(lockPath), 0755); err != nil {
+				return err
 			}
-			lockFile, err := singleinstance.CreateLockFile(lockPath)
+			lockFile, err = createLockFileFunc(lockPath)
 			if err != nil {
-				Fatal("An instance already exists")
+				return err
 			}
 			defer lockFile.Close()
 		}
 	}
 
 	if err := runAction(ctx, *action, config); err != nil {
-		Fatal(err)
+		return err
 	}
-
-	PrintDebugDetails()
+	return nil
 }
 
 func runAction(ctx context.Context, action string, config Config) error {
 	switch action {
 	case "browse":
-		return browseFiles(ctx, config)
+		return browseFilesFunc(ctx, config)
 	case "restore":
-		return restoreFiles(ctx, config)
+		return restoreFilesFunc(ctx, config)
 	case "download":
-		return downloadFiles(ctx, config)
+		return downloadFilesFunc(ctx, config)
 	case "link":
-		return linkFiles(ctx, config)
+		return linkFilesFunc(ctx, config)
 	case "mount":
-		return mountFiles(ctx, config)
+		return mountFilesFunc(ctx, config)
 	case "backup":
-		return backupFiles(ctx, config)
+		return backupFilesFunc(ctx, config)
 	case "fsck":
-		return fsckRemote(ctx, config)
+		return fsckRemoteFunc(ctx, config)
 	case "verify":
-		return verifyFiles(ctx, config)
+		return verifyFilesFunc(ctx, config)
 	default:
 		return ErrUnknownAction
 	}

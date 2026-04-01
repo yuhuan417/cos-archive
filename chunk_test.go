@@ -71,3 +71,9 @@ func TestChunkHashLargeFile(t *testing.T) {
 		t.Fatalf("unexpected hash: got=%x want=%x", got, want)
 	}
 }
+
+func TestChunkHashMissingFile(t *testing.T) {
+	if _, err := chunkHash(filepath.Join(t.TempDir(), "missing.bin"), 1); err == nil {
+		t.Fatal("expected missing file error")
+	}
+}

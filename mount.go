@@ -20,6 +20,15 @@ type mountTreeDir struct {
 	links map[string]*LinkInfo
 }
 
+type mountServer interface {
+	Unmount() error
+	Wait()
+}
+
+var mountFS = func(mountPoint string, root *mountRootNode, options *fs.Options) (mountServer, error) {
+	return fs.Mount(mountPoint, root, options)
+}
+
 func newMountTreeDir(mode os.FileMode) *mountTreeDir {
 	return &mountTreeDir{
 		mode:  mode,
@@ -253,7 +262,7 @@ func mountFiles(ctx context.Context, config Config) error {
 		nextIno: 1,
 	}
 	timeout := time.Second
-	server, err := fs.Mount(config.MountPoint, root, &fs.Options{
+	server, err := mountFS(config.MountPoint, root, &fs.Options{
 		MountOptions: fuse.MountOptions{
 			Options:       []string{"ro"},
 			FsName:        "cos-archive",
