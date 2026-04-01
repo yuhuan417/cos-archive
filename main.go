@@ -14,6 +14,8 @@ import (
 func main() {
 	action := flag.String("action", "backup", "a string")
 	configPath := flag.String("config", "config.json", "a string")
+	targetDir := flag.String("target", "", "override target dir")
+	mountPoint := flag.String("mountpoint", "", "override mount point")
 	verbose := flag.Bool("verbose", false, "enable verbose output")
 	flag.Parse()
 
@@ -23,6 +25,7 @@ func main() {
 	if err != nil {
 		Fatal(err)
 	}
+	config = applyRuntimeOverrides(config, *targetDir, *mountPoint)
 	if err := validateConfig(*action, config); err != nil {
 		Fatal(err)
 	}
@@ -31,15 +34,17 @@ func main() {
 	defer cancel()
 
 	if *action != "browse" {
-		lockPath := getLockFilePath(config)
-		if err := os.MkdirAll(path.Dir(lockPath), 0755); err != nil {
-			Fatal("Create lock dir error:", err)
+		if *action != "mount" {
+			lockPath := getLockFilePath(config)
+			if err := os.MkdirAll(path.Dir(lockPath), 0755); err != nil {
+				Fatal("Create lock dir error:", err)
+			}
+			lockFile, err := singleinstance.CreateLockFile(lockPath)
+			if err != nil {
+				Fatal("An instance already exists")
+			}
+			defer lockFile.Close()
 		}
-		lockFile, err := singleinstance.CreateLockFile(lockPath)
-		if err != nil {
-			Fatal("An instance already exists")
-		}
-		defer lockFile.Close()
 	}
 
 	if err := runAction(ctx, *action, config); err != nil {
@@ -59,6 +64,8 @@ func runAction(ctx context.Context, action string, config Config) error {
 		return downloadFiles(ctx, config)
 	case "link":
 		return linkFiles(ctx, config)
+	case "mount":
+		return mountFiles(ctx, config)
 	case "backup":
 		return backupFiles(ctx, config)
 	case "fsck":

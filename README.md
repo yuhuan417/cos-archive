@@ -19,6 +19,7 @@ COS-Archive 是一个基于 Go 语言开发的增量归档备份工具，专为 
 - **主要依赖**：
   - `github.com/tencentyun/cos-go-sdk-v5`：腾讯云 COS SDK
   - `github.com/dustin/go-humanize`：文件大小人性化显示
+  - `github.com/hanwen/go-fuse/v2`：只读 FUSE 挂载
   - `go.uber.org/ratelimit`：速率限制
   - `golang.org/x/sync/errgroup`：并发任务收口
   - `github.com/allan-simon/go-singleinstance`：单实例锁
@@ -34,6 +35,7 @@ cos-archive/
 ├── restore.go       # 恢复逻辑实现
 ├── download.go      # 下载逻辑实现
 ├── browse.go        # 浏览功能实现
+├── mount.go         # 只读 FUSE 挂载
 ├── link.go          # 链接处理逻辑
 ├── fsck.go          # 一致性检查
 ├── verify.go        # 验证功能
@@ -60,7 +62,7 @@ go build -o cos-archive
 ### 运行项目
 
 ```bash
-./cos-archive -action=<操作类型> -config=<配置文件路径>
+./cos-archive -action=<操作类型> -config=<配置文件路径> [-target=<目标目录>] [-mountpoint=<挂载目录>]
 ```
 
 ### 支持的操作类型
@@ -69,6 +71,7 @@ go build -o cos-archive
 - `restore`：为云端 chunk 发起解冻请求
 - `download`：下载远端索引和 chunk 到本地目录
 - `browse`：浏览本地索引内容
+- `mount`：将本地索引挂载为只读 FUSE 文件系统
 - `link`：基于已下载 chunk 重建恢复目录
 - `fsck`：执行一致性检查
 - `verify`：验证文件完整性
@@ -77,9 +80,18 @@ go build -o cos-archive
 
 1. 执行 `restore`
 2. 等待 COS 完成解冻
-3. 执行 `download`
-4. 执行 `link`
-5. 如需查看索引内容，再执行 `browse`
+3. 执行 `download -target=/path/to/cache`
+4. 执行 `link -target=/path/to/cache`
+5. 如需查看索引内容，再执行 `browse -target=/path/to/cache`
+
+### FUSE 挂载说明
+
+- `mount` 只使用本地索引构造只读文件系统视图
+- 目录、文件大小、权限、时间戳和符号链接目标都来自索引
+- 常规文件不会尝试从远端获取内容；读取时会直接失败
+- 适合 `ls`、`find`、`stat`、`readlink` 这类元数据浏览场景
+- 挂载目录通过 `-mountpoint=/path/to/mount` 指定
+- 索引来源目录通过 `-target=/path/to/cache` 指定
 
 ## 配置说明
 
@@ -93,7 +105,6 @@ go build -o cos-archive
         "/backup/2"
     ],
     "WorkingDir": "/var/lib/cos-archive/work",
-    "TargetDir": "/var/lib/cos-archive/restore-cache",
     "Threads": 4,
     "RestoreQPS": 90,
     "Port": "3389",
@@ -113,7 +124,6 @@ go build -o cos-archive
 - `BasePath`：扫描备份路径时使用的根目录
 - `FilePaths`：需要备份的文件路径列表
 - `WorkingDir`：工作目录，保存锁文件和远端索引缓存
-- `TargetDir`：下载 chunk、浏览索引和恢复目录的目标路径
 - `Threads`：上传线程数（默认 4）
 - `RestoreQPS`：发起解冻请求时的限速值（默认 90）
 - `Port`：服务端口（用于浏览功能）
@@ -123,6 +133,15 @@ go build -o cos-archive
 - `COS.Prefix`：云端存储前缀（默认 "data/"）
 - `COS.Class`：上传对象的存储类别（默认 `DEEP_ARCHIVE`）
 - `COS.Retries`：上传遇到 `ServiceUnavailable` 时的重试次数
+
+### 命令行参数
+
+- `-target`：为 `download` / `link` / `browse` / `mount` 指定目标目录
+- `-mountpoint`：为 `mount` 指定挂载目录
+
+兼容性说明：
+- 代码仍兼容从 `config.json` 读取 `TargetDir` 和 `MountPoint`
+- 但推荐改用命令行参数传入，便于同一份配置复用到不同运行场景
 
 ## 存储设计
 
@@ -240,4 +259,3 @@ go build -o cos-archive
 - 删除候选默认先标记 7 天，但实际删除不会早于 180 天最低计费期
 - 首次运行会进行全量备份
 - 索引文件存储在云端，不进行归档级别存储
-

@@ -15,6 +15,7 @@ type Config struct {
 	Threads    int
 	WorkingDir string
 	TargetDir  string
+	MountPoint string
 	Index      string
 	Port       string
 	RestoreQPS int
@@ -57,6 +58,16 @@ func getConfig(configFileName string) (Config, error) {
 	return config, nil
 }
 
+func applyRuntimeOverrides(config Config, targetDir string, mountPoint string) Config {
+	if targetDir != "" {
+		config.TargetDir = targetDir
+	}
+	if mountPoint != "" {
+		config.MountPoint = mountPoint
+	}
+	return config
+}
+
 func validateConfig(action string, config Config) error {
 	switch action {
 	case "backup":
@@ -90,6 +101,14 @@ func validateConfig(action string, config Config) error {
 		return nil
 	case "link":
 		return validateTargetDir(config)
+	case "mount":
+		if err := validateTargetDir(config); err != nil {
+			return err
+		}
+		if config.MountPoint == "" {
+			return fmt.Errorf("%w: empty mount point", ErrConfigInvalid)
+		}
+		return nil
 	case "fsck":
 		if err := validateWorkingDir(config); err != nil {
 			return err
