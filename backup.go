@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path"
-	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -93,22 +92,16 @@ func uploadFiles(ctx context.Context, c *COS, config Config, localIndex *Index, 
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(config.Threads)
-	var processed atomic.Int64
-	var processedBytes atomic.Int64
-	stopProgress := startProgressLogger(gctx, "Upload progress", int64(len(tasks)), uploadSize, &processed, &processedBytes)
 	for _, uploadCtx := range tasks {
 		uploadCtx := uploadCtx
 		g.Go(func() error {
 			if err := uploadPayload(gctx, c, config, uploadCtx); err != nil {
 				return err
 			}
-			processed.Add(1)
-			processedBytes.Add(uploadCtx.size)
 			return nil
 		})
 	}
 	err := g.Wait()
-	stopProgress()
 	if err != nil {
 		return err
 	}
