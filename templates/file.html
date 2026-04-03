@@ -5,10 +5,6 @@
 <title>File {{ .Path }}</title>
 </head>
 <body>
-{{ if .CloudURL }}
-{{ .Path }} on cloud: {{ .CloudURL }}
-{{ else }}
-{{ .Path }}
-{{ end }}
+{{ .Message }}
 </body>
 </html>

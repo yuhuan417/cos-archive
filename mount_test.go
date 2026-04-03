@@ -16,7 +16,7 @@ func TestBuildMountTree(t *testing.T) {
 		},
 	}
 
-	tree := buildMountTree(entries)
+	tree := buildMountTree(Config{}, entries)
 	backupDir, ok := tree.dirs["backup"]
 	if !ok {
 		t.Fatal("missing backup dir")
@@ -26,6 +26,9 @@ func TestBuildMountTree(t *testing.T) {
 	}
 	if _, ok := backupDir.files["file.txt"]; !ok {
 		t.Fatal("missing file.txt in backup dir")
+	}
+	if got := string(backupDir.files["file.txt"].content); got != "/backup/file.txt" {
+		t.Fatalf("unexpected synthesized file content: %q", got)
 	}
 	if _, ok := backupDir.links["link"]; !ok {
 		t.Fatal("missing link in backup dir")

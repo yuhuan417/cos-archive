@@ -16,8 +16,13 @@ import (
 type mountTreeDir struct {
 	mode  os.FileMode
 	dirs  map[string]*mountTreeDir
-	files map[string]*FileInfo
+	files map[string]*mountTreeFile
 	links map[string]*LinkInfo
+}
+
+type mountTreeFile struct {
+	info    *FileInfo
+	content []byte
 }
 
 type mountServer interface {
@@ -33,12 +38,12 @@ func newMountTreeDir(mode os.FileMode) *mountTreeDir {
 	return &mountTreeDir{
 		mode:  mode,
 		dirs:  make(map[string]*mountTreeDir),
-		files: make(map[string]*FileInfo),
+		files: make(map[string]*mountTreeFile),
 		links: make(map[string]*LinkInfo),
 	}
 }
 
-func buildMountTree(entries DirEnt) *mountTreeDir {
+func buildMountTree(config Config, entries DirEnt) *mountTreeDir {
 	root := newMountTreeDir(0555)
 	ensureDir := func(fullPath string, mode os.FileMode) *mountTreeDir {
 		if fullPath == "/" || fullPath == "." || fullPath == "" {
@@ -72,7 +77,10 @@ func buildMountTree(entries DirEnt) *mountTreeDir {
 
 	for filePath, fi := range entries.Files {
 		parent := ensureDir(path.Dir(filePath), 0)
-		parent.files[path.Base(filePath)] = fi
+		parent.files[path.Base(filePath)] = &mountTreeFile{
+			info:    fi,
+			content: []byte(browseFileMessage(config, fi, filePath)),
+		}
 	}
 	for linkPath, li := range entries.Links {
 		parent := ensureDir(path.Dir(linkPath), 0)
@@ -156,7 +164,7 @@ func (n *mountRootNode) addDirChildren(ctx context.Context, inode *fs.Inode, tre
 	}
 	sort.Strings(fileNames)
 	for _, name := range fileNames {
-		fileNode := &mountFileNode{info: tree.files[name]}
+		fileNode := &mountFileNode{file: tree.files[name]}
 		child := inode.NewPersistentInode(ctx, fileNode, n.nextStable(syscall.S_IFREG))
 		inode.AddChild(name, child, false)
 	}
@@ -196,7 +204,7 @@ func (n *mountDirNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.A
 
 type mountFileNode struct {
 	fs.Inode
-	info *FileInfo
+	file *mountTreeFile
 }
 
 var _ = (fs.InodeEmbedder)((*mountFileNode)(nil))
@@ -204,11 +212,11 @@ var _ = (fs.NodeGetattrer)((*mountFileNode)(nil))
 var _ = (fs.NodeOpener)((*mountFileNode)(nil))
 
 func (n *mountFileNode) Getattr(ctx context.Context, f fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
-	out.Mode = uint32(n.info.Mode.Perm())
-	out.Size = uint64(n.info.Size)
-	out.Mtime = uint64(n.info.ModTime)
-	out.Ctime = uint64(n.info.ModTime)
-	out.Atime = uint64(n.info.ModTime)
+	out.Mode = uint32(n.file.info.Mode.Perm())
+	out.Size = uint64(n.file.info.Size)
+	out.Mtime = uint64(n.file.info.ModTime)
+	out.Ctime = uint64(n.file.info.ModTime)
+	out.Atime = uint64(n.file.info.ModTime)
 	out.SetTimeout(time.Second)
 	return 0
 }
@@ -217,16 +225,29 @@ func (n *mountFileNode) Open(ctx context.Context, flags uint32) (fs.FileHandle, 
 	if flags&fuse.O_ANYWRITE != 0 {
 		return nil, 0, syscall.EROFS
 	}
-	return mountFileHandle{}, fuse.FOPEN_DIRECT_IO, 0
+	return mountFileHandle{content: n.file.content}, fuse.FOPEN_DIRECT_IO, 0
 }
 
-type mountFileHandle struct{}
+type mountFileHandle struct {
+	content []byte
+}
 
 var _ = (fs.FileHandle)((mountFileHandle{}))
 var _ = (fs.FileReader)((mountFileHandle{}))
 
-func (mountFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
-	return nil, syscall.EIO
+func (h mountFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
+	if off < 0 {
+		return nil, syscall.EINVAL
+	}
+	if off >= int64(len(h.content)) {
+		return fuse.ReadResultData(nil), 0
+	}
+	start := int(off)
+	end := start + len(dest)
+	if end > len(h.content) {
+		end = len(h.content)
+	}
+	return fuse.ReadResultData(h.content[start:end]), 0
 }
 
 type mountSymlinkNode struct {
@@ -258,7 +279,7 @@ func mountFiles(ctx context.Context, config Config) error {
 		return err
 	}
 	root := &mountRootNode{
-		tree:    buildMountTree(index.Entries),
+		tree:    buildMountTree(config, index.Entries),
 		nextIno: 1,
 	}
 	timeout := time.Second

@@ -35,8 +35,8 @@ type dirPageData struct {
 }
 
 type filePageData struct {
-	Path     string
-	CloudURL string
+	Path    string
+	Message string
 }
 
 type linkPageData struct {
@@ -109,6 +109,13 @@ func buildCloudURL(config Config, fi *FileInfo) string {
 	return u.String()
 }
 
+func browseFileMessage(config Config, fi *FileInfo, p string) string {
+	if cloudURL := buildCloudURL(config, fi); cloudURL != "" {
+		return p + " on cloud: " + cloudURL
+	}
+	return p
+}
+
 func renderDir(m DirEnt, p string, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "no-sniff")
@@ -122,8 +129,8 @@ func renderFile(config Config, fi *FileInfo, p string, w http.ResponseWriter) er
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "no-sniff")
 	return browseTemplates.ExecuteTemplate(w, "file.html", filePageData{
-		Path:     p,
-		CloudURL: buildCloudURL(config, fi),
+		Path:    p,
+		Message: browseFileMessage(config, fi, p),
 	})
 }
 

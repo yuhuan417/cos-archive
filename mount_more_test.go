@@ -61,7 +61,10 @@ func TestMountNodeOperations(t *testing.T) {
 	}
 
 	fileInfo := &FileInfo{Mode: 0644, Size: 123, ModTime: 456}
-	fileNode := &mountFileNode{info: fileInfo}
+	fileNode := &mountFileNode{file: &mountTreeFile{
+		info:    fileInfo,
+		content: []byte("/file.txt on cloud: https://example.invalid/chunk"),
+	}}
 	var fileAttr fuse.AttrOut
 	if errno := fileNode.Getattr(context.Background(), nil, &fileAttr); errno != 0 {
 		t.Fatalf("file getattr errno: %v", errno)
@@ -76,12 +79,32 @@ func TestMountNodeOperations(t *testing.T) {
 	if errno != 0 {
 		t.Fatalf("unexpected read open errno: %v", errno)
 	}
-	if _, ok := handle.(mountFileHandle); !ok || flags != fuse.FOPEN_DIRECT_IO {
+	fileHandle, ok := handle.(mountFileHandle)
+	if !ok || flags != fuse.FOPEN_DIRECT_IO {
 		t.Fatalf("unexpected file handle open result: %#v flags=%d", handle, flags)
 	}
+	if got := string(fileHandle.content); got != "/file.txt on cloud: https://example.invalid/chunk" {
+		t.Fatalf("unexpected synthetic file content: %q", got)
+	}
 
-	if _, errno := (mountFileHandle{}).Read(context.Background(), make([]byte, 4), 0); errno != syscall.EIO {
-		t.Fatalf("expected EIO from mount file read, got %v", errno)
+	readResult, errno := (mountFileHandle{content: []byte("browse content")}).Read(context.Background(), make([]byte, 6), 7)
+	if errno != 0 {
+		t.Fatalf("unexpected read errno: %v", errno)
+	}
+	data, status := readResult.Bytes(nil)
+	if status != fuse.OK || string(data) != "conten" {
+		t.Fatalf("unexpected read result: data=%q status=%v", data, status)
+	}
+	readResult, errno = (mountFileHandle{content: []byte("browse content")}).Read(context.Background(), make([]byte, 6), 99)
+	if errno != 0 {
+		t.Fatalf("unexpected EOF read errno: %v", errno)
+	}
+	data, status = readResult.Bytes(nil)
+	if status != fuse.OK || len(data) != 0 {
+		t.Fatalf("unexpected EOF read result: data=%q status=%v", data, status)
+	}
+	if _, errno := (mountFileHandle{content: []byte("browse content")}).Read(context.Background(), make([]byte, 1), -1); errno != syscall.EINVAL {
+		t.Fatalf("expected EINVAL from negative offset read, got %v", errno)
 	}
 
 	dirNode := &mountDirNode{tree: newMountTreeDir(0750)}
@@ -108,7 +131,7 @@ func TestMountNodeOperations(t *testing.T) {
 
 func TestMountOnAddBuildsChildren(t *testing.T) {
 	root := &mountRootNode{
-		tree: buildMountTree(DirEnt{
+		tree: buildMountTree(Config{}, DirEnt{
 			Files: FileInfoMap{
 				"/dir/file.txt": {Size: 10, Mode: 0644},
 				"/root.txt":     {Size: 1, Mode: 0600},

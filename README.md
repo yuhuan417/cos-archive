@@ -88,7 +88,7 @@ go build -o cos-archive
 
 - `mount` 只使用本地索引构造只读文件系统视图
 - 目录、文件大小、权限、时间戳和符号链接目标都来自索引
-- 常规文件不会尝试从远端获取内容；读取时会直接失败
+- 常规文件不会尝试从远端获取原始内容；读取时返回与 `browse` 一致的说明文本
 - 适合 `ls`、`find`、`stat`、`readlink` 这类元数据浏览场景
 - 挂载目录通过 `-mountpoint=/path/to/mount` 指定
 - 索引来源目录通过 `-target=/path/to/cache` 指定
