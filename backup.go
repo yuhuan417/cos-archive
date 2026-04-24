@@ -7,11 +7,14 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"slices"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"golang.org/x/sync/errgroup"
 )
+
+const uploadAnalysisThreshold = 300 << 20 // 300 MiB
 
 // UploadCTX struct
 type UploadCTX struct {
@@ -88,6 +91,51 @@ func uploadFiles(ctx context.Context, c *COS, config Config, localIndex *Index, 
 		if _, ok := localIndex.DeletedChunks[h]; ok {
 			delete(localIndex.DeletedChunks, h)
 		}
+	}
+
+	if uploadSize > uploadAnalysisThreshold {
+		slices.SortFunc(tasks, func(a, b UploadCTX) int {
+			if b.size > a.size {
+				return 1
+			}
+			if b.size < a.size {
+				return -1
+			}
+			return 0
+		})
+
+		typeSizeBuckets := [4]int64{0, 0, 0, 0} // >=100MiB, 10-100MiB, 1-10MiB, <1MiB
+		typeCntBuckets := [4]int{0, 0, 0, 0}
+		for _, t := range tasks {
+			switch {
+			case t.size >= 100<<20:
+				typeSizeBuckets[0] += t.size
+				typeCntBuckets[0]++
+			case t.size >= 10<<20:
+				typeSizeBuckets[1] += t.size
+				typeCntBuckets[1]++
+			case t.size >= 1<<20:
+				typeSizeBuckets[2] += t.size
+				typeCntBuckets[2]++
+			default:
+				typeSizeBuckets[3] += t.size
+				typeCntBuckets[3]++
+			}
+		}
+
+		slog.Info("Upload size analysis",
+			">100MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[0], humanize.IBytes(uint64(typeSizeBuckets[0]))),
+			"10-100MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[1], humanize.IBytes(uint64(typeSizeBuckets[1]))),
+			"1-10MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[2], humanize.IBytes(uint64(typeSizeBuckets[2]))),
+			"<1MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[3], humanize.IBytes(uint64(typeSizeBuckets[3]))),
+		)
+
+		topN := min(10, len(tasks))
+		topFiles := make([]string, topN)
+		for i := range topN {
+			topFiles[i] = fmt.Sprintf("%s (%s)", tasks[i].localPath, humanize.IBytes(uint64(tasks[i].size)))
+		}
+		slog.Info("Upload top files", "files", topFiles)
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
