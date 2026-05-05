@@ -93,6 +93,33 @@ func uploadFiles(ctx context.Context, c *COS, config Config, localIndex *Index, 
 		}
 	}
 
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(config.Threads)
+	for _, uploadCtx := range tasks {
+		uploadCtx := uploadCtx
+		g.Go(func() error {
+			if err := uploadPayload(gctx, c, config, uploadCtx); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	err := g.Wait()
+	if err != nil {
+		return err
+	}
+
+	slog.Info("Uploaded files", "count", cnt, "size", humanize.IBytes(uint64(uploadSize)))
+	slog.Info("Total chunk size", "size", humanize.IBytes(uint64(totalSize)))
+
+	for k, v := range remoteChunkMap {
+		if !v {
+			slog.Debug("Marking delete chunk", "path", chunkPath(k))
+			localIndex.DeletedChunks[k] = deleteTime
+		}
+	}
+	delErr := localIndex.DeleteOutdatedChunks(ctx)
+
 	if uploadSize > uploadAnalysisThreshold {
 		slices.SortFunc(tasks, func(a, b UploadCTX) int {
 			if b.size > a.size {
@@ -138,31 +165,7 @@ func uploadFiles(ctx context.Context, c *COS, config Config, localIndex *Index, 
 		slog.Info("Upload top files", "files", topFiles)
 	}
 
-	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(config.Threads)
-	for _, uploadCtx := range tasks {
-		uploadCtx := uploadCtx
-		g.Go(func() error {
-			if err := uploadPayload(gctx, c, config, uploadCtx); err != nil {
-				return err
-			}
-			return nil
-		})
-	}
-	err := g.Wait()
-	if err != nil {
-		return err
-	}
-
-	slog.Info("Uploaded files", "count", cnt, "size", humanize.IBytes(uint64(uploadSize)))
-	slog.Info("Total chunk size", "size", humanize.IBytes(uint64(totalSize)))
-	for k, v := range remoteChunkMap {
-		if !v {
-			slog.Debug("Marking delete chunk", "path", chunkPath(k))
-			localIndex.DeletedChunks[k] = deleteTime
-		}
-	}
-	return localIndex.DeleteOutdatedChunks(ctx)
+	return delErr
 }
 
 func backupFiles(ctx context.Context, config Config) error {
