@@ -131,7 +131,7 @@ func uploadFiles(ctx context.Context, c *COS, config Config, localIndex *Index, 
 			return 0
 		})
 
-		typeSizeBuckets := [4]int64{0, 0, 0, 0} // >=100MiB, 10-100MiB, 1-10MiB, <1MiB
+		typeSizeBuckets := [4]int64{0, 0, 0, 0} // 100MiB+, 10-100MiB, 1-10MiB, 0-1MiB
 		typeCntBuckets := [4]int{0, 0, 0, 0}
 		for _, t := range tasks {
 			switch {
@@ -151,10 +151,10 @@ func uploadFiles(ctx context.Context, c *COS, config Config, localIndex *Index, 
 		}
 
 		slog.Info("Upload size analysis",
-			">100MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[0], humanize.IBytes(uint64(typeSizeBuckets[0]))),
+			"100MiB+", fmt.Sprintf("%d files (%s)", typeCntBuckets[0], humanize.IBytes(uint64(typeSizeBuckets[0]))),
 			"10-100MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[1], humanize.IBytes(uint64(typeSizeBuckets[1]))),
 			"1-10MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[2], humanize.IBytes(uint64(typeSizeBuckets[2]))),
-			"<1MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[3], humanize.IBytes(uint64(typeSizeBuckets[3]))),
+			"0-1MiB", fmt.Sprintf("%d files (%s)", typeCntBuckets[3], humanize.IBytes(uint64(typeSizeBuckets[3]))),
 		)
 
 		topN := min(10, len(tasks))
