@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -338,9 +339,19 @@ func TestIndexRemoteOperations(t *testing.T) {
 		index.DeletedChunks[keepChunk] = now - 10
 		index.DeletedChunks[failChunk] = now - 10
 
+		var logBuf strings.Builder
+		oldLogger := slog.Default()
+		slog.SetDefault(slog.New(&SimpleHandler{writer: &logBuf}))
+		t.Cleanup(func() {
+			slog.SetDefault(oldLogger)
+		})
+
 		err := index.DeleteOutdatedChunks(context.Background())
 		if err == nil {
 			t.Fatal("expected joined error for failed HEAD request")
+		}
+		if got := logBuf.String(); !strings.Contains(got, "Deleting outdated remote chunk count=1 size=1 B") {
+			t.Fatalf("expected deletion log with freed size, got %q", got)
 		}
 		if _, ok := index.DeletedChunks[oldChunk]; ok {
 			t.Fatalf("expected old chunk deletion mark removed, got %#v", index.DeletedChunks)

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"github.com/ugorji/go/codec"
 )
@@ -261,6 +262,7 @@ func (index *Index) DeleteOutdatedChunks(ctx context.Context) error {
 		return err
 	}
 	cnt := 0
+	freedSize := int64(0)
 	var errs error
 	for fp, t := range index.DeletedChunks {
 		if now <= t {
@@ -293,8 +295,9 @@ func (index *Index) DeleteOutdatedChunks(ctx context.Context) error {
 			}
 			delete(index.DeletedChunks, fp)
 			cnt++
+			freedSize += fp.size
 		}
 	}
-	slog.Info("Deleting outdated remote chunk", "count", cnt)
+	slog.Info("Deleting outdated remote chunk", "count", cnt, "size", humanize.IBytes(uint64(freedSize)))
 	return errs
 }
