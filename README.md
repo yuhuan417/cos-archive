@@ -95,7 +95,7 @@ go build -o cos-archive
 
 ## 配置说明
 
-配置文件使用 JSON 格式，示例 `config.json`：
+配置文件使用 JSON 格式，可从 `config.example.json` 复制为本地 `config.json` 后修改：
 
 ```json
 {

@@ -1,4 +1,5 @@
 cos-archive
+config.json
 meta.json
 log
 pid.lock

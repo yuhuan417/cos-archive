@@ -1,0 +1,19 @@
+{
+    "BasePath": "/",
+    "FilePaths": [
+        "/backup/1",
+        "/backup/2"
+    ],
+    "WorkingDir": "/var/lib/cos-archive/work",
+    "Threads": 4,
+    "RestoreQPS": 90,
+    "Port": "3389",
+    "COS": {
+        "URL": "https://example-1250000000.cos.ap-region.myqcloud.com",
+        "ID": "your-cos-id",
+        "Key": "your-cos-key",
+        "Prefix": "data/",
+        "Class": "DEEP_ARCHIVE",
+        "Retries": 1
+    }
+}
