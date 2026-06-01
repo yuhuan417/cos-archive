@@ -1,101 +1,52 @@
-# COS-Archive 增量归档备份工具
+# COS Archive
 
-COS-Archive 是一个基于 Go 语言开发的增量归档备份工具，专为 Linux 文件系统设计。该项目使用腾讯云对象存储（COS）作为后端存储，支持增量备份、文件去重、分块上传和版本管理功能。
+[English](README.en.md)
 
-## 主要特性
+COS Archive 是一个面向腾讯云 COS 归档存储的文件备份工具。它把可频繁访问的索引和真正占空间的数据块分开管理：索引始终使用标准存储，数据块可以上传到 `DEEP_ARCHIVE` 等低成本归档存储。常规备份、浏览、校验和清理尽量依赖索引、对象列表和自描述路径，避免读取归档对象内容，也避免把大量冷对象从归档层唤醒。
 
-- **增量备份**：只备份变更的文件，节省存储空间和传输时间
-- **文件去重**：基于内容哈希的去重机制，相同文件只上传一次
-- **分块上传**：支持大文件自动分块上传
-- **版本管理**：类似 Time Machine 的多版本保存及恢复功能
-- **云端延迟删除**：支持云端自动延迟删除机制
-- **元数据保护**：保持文件权限、时间戳等元信息
-- **符号链接支持**：保持符号链接结构
-- **中断恢复**：本地任务随时中断不影响数据最终一致性
+这个项目适合长期保存照片、个人文件、历史备份等冷数据：写入不频繁，恢复可以接受先解冻，日常维护希望尽量少触碰归档对象。
 
-## 技术栈
+## 归档存储优化
 
-- **语言**：Go 1.25+
-- **主要依赖**：
-  - `github.com/tencentyun/cos-go-sdk-v5`：腾讯云 COS SDK
-  - `github.com/dustin/go-humanize`：文件大小人性化显示
-  - `github.com/hanwen/go-fuse/v2`：只读 FUSE 挂载
-  - `go.uber.org/ratelimit`：速率限制
-  - `golang.org/x/sync/errgroup`：并发任务收口
-  - `github.com/allan-simon/go-singleinstance`：单实例锁
+归档存储便宜，但不适合频繁 `HEAD`、`GET` 或读取对象内容。COS Archive 的设计重点就是减少这类操作：
 
-## 项目结构
+- **热索引，冷数据**：`meta.json.{timestamp}` 索引文件固定上传为 `STANDARD`，保存目录、文件、权限、mtime、符号链接、chunk size/hash 和删除标记；大数据 chunk 按配置上传到 `DEEP_ARCHIVE`。
+- **路径自描述 chunk**：chunk 对象名是 `size-sha1`，例如 `12345-...`。很多统计和校验可以直接从路径恢复 size/hash，不需要读取对象 metadata。
+- **用 LIST 替代逐对象探测**：`fsck`、`verify`、`restore`、`download` 会扫描 chunk prefix 构建远端 chunk map，而不是对每个 chunk 做 `HEAD`。
+- **常规浏览不取冷数据**：`browse` 和 `mount` 只读取本地索引；FUSE 挂载可用于 `ls`、`find`、`stat`、`readlink`，不会拉取归档文件内容。
+- **延迟删除适配最低计费期**：删除候选先进入 `DeletedChunks`，默认 7 天宽限；实际删除时会参考对象 `Last-Modified`，避免早于 180 天最低计费期删除。日志会输出删除数量和释放空间。
+- **恢复显式分阶段**：先 `restore` 批量发起归档解冻，再 `download` 下载已解冻 chunk，最后 `link` 在本地重建目录树。
 
-```
-cos-archive/
-├── main.go          # 程序入口点
-├── errors.go        # 统一错误类型
-├── config.go        # 配置结构定义
-├── backup.go        # 备份逻辑实现
-├── restore.go       # 恢复逻辑实现
-├── download.go      # 下载逻辑实现
-├── browse.go        # 浏览功能实现
-├── mount.go         # 只读 FUSE 挂载
-├── link.go          # 链接处理逻辑
-├── fsck.go          # 一致性检查
-├── verify.go        # 验证功能
-├── index.go         # 索引管理
-├── scanner.go       # 本地目录扫描
-├── types.go         # 核心数据类型
-├── chunk.go         # 分块处理
-├── cos.go           # COS 接口封装
-├── progress.go      # 进度日志
-├── templates/       # browse HTML 模板
-├── *_test.go        # 最小回归测试
-├── config.json      # 配置文件示例
-└── go.mod           # Go 模块定义
-```
+当前仍有少量必要的对象 metadata 操作：上传前会 `HEAD` 判断 chunk 是否已存在；过期删除时会 `HEAD` 读取 `Last-Modified` 做最低计费期保护；远端索引会用 `x-cos-meta-hash` 判断本地缓存是否可复用。这些操作集中在索引或少量候选对象上，不会在普通浏览和本地索引操作中读取归档对象内容。
 
-## 构建和运行
+## 功能
 
-### 构建项目
+- 增量备份：未变化文件复用远端索引中的 hash，只上传新增 chunk。
+- 内容去重：相同 size/hash 的文件只保留一个 chunk。
+- 归档恢复：支持批量发起 COS restore 请求，并按 QPS 限流。
+- 多版本索引：索引命名为 `meta.json.{timestamp}`，默认保留最近 30 个版本。
+- 延迟删除：远端失去引用的 chunk 先标记，之后再清理。
+- 本地浏览：通过 Web 页面或只读 FUSE 挂载查看索引内容。
+- 链接恢复：下载 chunk 后用 hardlink 重建文件树，保留权限和 mtime。
+- 一致性检查：对比远端 LIST 结果和索引，清理丢失或孤立 chunk 记录。
+
+## 构建
+
+需要 Go 1.25 或更新版本。
 
 ```bash
 go build -o cos-archive
 ```
 
-### 运行项目
+## 配置
+
+先复制示例配置：
 
 ```bash
-./cos-archive -action=<操作类型> -config=<配置文件路径> [-target=<目标目录>] [-mountpoint=<挂载目录>]
+cp config.example.json config.json
 ```
 
-### 支持的操作类型
-
-- `backup`：执行增量备份（默认操作）
-- `restore`：为云端 chunk 发起解冻请求
-- `download`：下载远端索引和 chunk 到本地目录
-- `browse`：浏览本地索引内容
-- `mount`：将本地索引挂载为只读 FUSE 文件系统
-- `link`：基于已下载 chunk 重建恢复目录
-- `fsck`：执行一致性检查
-- `verify`：验证文件完整性
-
-### 典型恢复流程
-
-1. 执行 `restore`
-2. 等待 COS 完成解冻
-3. 执行 `download -target=/path/to/cache`
-4. 执行 `link -target=/path/to/cache`
-5. 如需查看索引内容，再执行 `browse -target=/path/to/cache`
-
-### FUSE 挂载说明
-
-- `mount` 只使用本地索引构造只读文件系统视图
-- 目录、文件大小、权限、时间戳和符号链接目标都来自索引
-- 常规文件不会尝试从远端获取原始内容；读取时返回与 `browse` 一致的说明文本
-- 适合 `ls`、`find`、`stat`、`readlink` 这类元数据浏览场景
-- 挂载目录通过 `-mountpoint=/path/to/mount` 指定
-- 索引来源目录通过 `-target=/path/to/cache` 指定
-
-## 配置说明
-
-配置文件使用 JSON 格式，可从 `config.example.json` 复制为本地 `config.json` 后修改：
+示例：
 
 ```json
 {
@@ -119,143 +70,125 @@ go build -o cos-archive
 }
 ```
 
-### 配置参数说明
+参数说明：
 
-- `BasePath`：扫描备份路径时使用的根目录
-- `FilePaths`：需要备份的文件路径列表
-- `WorkingDir`：工作目录，保存锁文件和远端索引缓存
-- `Threads`：上传线程数（默认 4）
-- `RestoreQPS`：发起解冻请求时的限速值（默认 90）
-- `Port`：服务端口（用于浏览功能）
-- `COS.URL`：腾讯云 COS 访问地址
-- `COS.ID`：腾讯云访问密钥 ID
-- `COS.Key`：腾讯云访问密钥
-- `COS.Prefix`：云端存储前缀（默认 "data/"）
-- `COS.Class`：上传对象的存储类别（默认 `DEEP_ARCHIVE`）
-- `COS.Retries`：上传遇到 `ServiceUnavailable` 时的重试次数
+| 参数 | 说明 |
+| --- | --- |
+| `BasePath` | 扫描备份路径时使用的根目录。 |
+| `FilePaths` | 需要备份的路径列表，会与 `BasePath` 拼接。 |
+| `WorkingDir` | 工作目录，用于锁文件和远端索引缓存。 |
+| `Threads` | 上传并发数，默认 `4`。 |
+| `RestoreQPS` | 发起解冻请求的限速，默认 `90`。 |
+| `Port` | `browse` Web 服务端口。 |
+| `COS.URL` | COS bucket URL。 |
+| `COS.ID` | COS SecretId。 |
+| `COS.Key` | COS SecretKey。 |
+| `COS.Prefix` | chunk 对象前缀，默认 `data/`。 |
+| `COS.Class` | 上传 chunk 的存储类型，默认 `DEEP_ARCHIVE`。 |
+| `COS.Retries` | 上传遇到 `ServiceUnavailable` 时的重试次数。 |
 
-### 命令行参数
+`config.json` 已在 `.gitignore` 中忽略，不要提交真实 bucket 和密钥。
 
-- `-target`：为 `download` / `link` / `browse` / `mount` 指定目标目录
-- `-mountpoint`：为 `mount` 指定挂载目录
+## 使用
 
-兼容性说明：
-- 代码仍兼容从 `config.json` 读取 `TargetDir` 和 `MountPoint`
-- 但推荐改用命令行参数传入，便于同一份配置复用到不同运行场景
+通用格式：
 
-## 存储设计
+```bash
+./cos-archive -action=<action> -config=config.json [-target=<dir>] [-mountpoint=<dir>] [-verbose]
+```
 
-### ChunkKey 数据结构
+动作：
 
-| 字段名 | 类型   | 说明      |
-| ------ | ------ | ---------------- |
-| size   | int64  | 文件大小 |
-| hash   | HashType | SHA1哈希值（20字节） |
+| action | 作用 |
+| --- | --- |
+| `backup` | 默认动作。扫描本地文件，上传新增 chunk，写入新索引。 |
+| `restore` | 对远端 chunk 发起 COS 归档解冻请求。 |
+| `download` | 下载远端索引和 chunk 到本地 `target`。 |
+| `link` | 基于已下载 chunk 在 `target/restore` 重建文件树。 |
+| `browse` | 读取本地索引并启动 Web 浏览。 |
+| `mount` | 将本地索引挂载成只读 FUSE 文件系统。 |
+| `fsck` | 对比远端 chunk 列表和索引，修复索引中的丢失/孤立记录。 |
+| `verify` | 对本地文件、远端索引和远端 chunk 列表做一致性验证。 |
 
-### FileInfo 数据结构
+常用命令：
 
-| 字段名   | 类型       | 说明          |
-| ------- | --------- | -------------------- |
-| Size    | int64     | 文件大小                 |
-| Mode    | os.FileMode | 文件权限                 |
-| ModTime | int64     | 文件修改时间（Unix时间戳）                |
-| Hash    | HashType  | 文件哈希值，SHA1算法 |
+```bash
+# 增量备份
+./cos-archive -action=backup -config=config.json
 
-### DirInfo 数据结构
+# 发起归档解冻
+./cos-archive -action=restore -config=config.json
 
-| 字段名 | 类型          | 说明          |
-| ----- | ------------ | -------------------- |
-| Mode  | os.FileMode  | 目录权限                 |
+# 下载解冻后的数据到本地缓存
+./cos-archive -action=download -config=config.json -target=/path/to/cache
 
-### LinkInfo 数据结构
+# 重建文件树
+./cos-archive -action=link -config=config.json -target=/path/to/cache
 
-| 字段名   | 类型   | 说明          |
-| ----- | ----- | -------------------- |
-| LinkTo | string | 符号链接目标路径 |
+# 浏览本地缓存中的索引
+./cos-archive -action=browse -config=config.json -target=/path/to/cache
 
-### Index 数据结构
+# 挂载索引视图
+./cos-archive -action=mount -config=config.json -target=/path/to/cache -mountpoint=/path/to/mount
+```
 
-| 字段名           | 类型                | 说明          |
-| --------------- | ------------------ | -------------------- |
-| Entries         | DirEnt             | 目录条目集合 |
-| DeletedChunks   | ChunkDeleteMarkMap | 已删除块标记映射 |
-| config          | Config             | 配置信息 |
+## 恢复流程
 
-### DirEnt 数据结构
+归档对象不能立即下载，完整恢复通常分四步：
 
-| 字段名  | 类型         | 说明          |
-| ------ | ----------- | -------------------- |
-| Files  | FileInfoMap | 文件信息映射 |
-| Dirs   | DirInfoMap  | 目录信息映射 |
-| Links  | LinkInfoMap | 链接信息映射 |
+1. 运行 `restore` 发起解冻请求。
+2. 等待 COS 完成解冻。
+3. 运行 `download -target=/path/to/cache` 下载索引和 chunk。
+4. 运行 `link -target=/path/to/cache` 在 `target/restore` 重建文件树。
 
+`download` 会把 chunk 放到 `target/chunks/<suffix>/<size-hash>`，`link` 会用 hardlink 复用这些 chunk，避免额外复制数据。
 
+## 浏览和挂载
 
-## 核心逻辑
+`browse` 和 `mount` 都只依赖本地索引，不读取归档对象内容：
 
-### 备份流程 (backup.go)
+- 目录、文件大小、权限、mtime 和符号链接目标来自索引。
+- 常规文件在 FUSE 中是占位视图，适合查看元数据，不用于直接读取原始内容。
+- 如需真实文件内容，请走 `restore`、`download`、`link` 恢复流程。
 
-1. 加载远程索引到 `remoteIndex`
-2. 生成本地索引到 `localIndex`，复用远程索引中未变更文件的哈希值
-3. 构建本地和远程的块映射表 `localChunkMap` 和 `remoteChunkMap`
-4. 并发上传缺失的文件块到云端存储
-5. 标记远程存在但本地不存在的块为待删除（7天后执行）
-6. 输出周期性上传进度
-7. 上传新的索引文件到云端
+## 存储模型
 
-### 一致性检查 (fsck.go)
+索引结构：
 
-1. 加载远程索引
-2. 删除已过删除时间的文件块
-3. 扫描云端所有实际文件块，构建云端块映射表
-4. 比较索引和实际文件，发现不一致：
-   - 索引中有但云端没有的文件：从索引中删除
-   - 云端有但索引中没有的文件：标记为 lost_found（10年后删除）
-5. 上传更新后的索引
+- `Entries.Files`：`path -> {Size, Mode, ModTime, Hash}`
+- `Entries.Dirs`：`path -> {Mode}`
+- `Entries.Links`：`path -> {LinkTo}`
+- `DeletedChunks`：`ChunkKey -> delete_after_unix`
 
-### 哈希算法 (chunk.go)
+chunk key：
 
-使用迅雷哈希算法计算文件哈希：
-- 小文件（<0xF000字节）：直接计算整个文件的SHA1
-- 大文件：计算文件开头0x5000字节、1/3处0x5000字节和末尾0x5000字节的SHA1
+```text
+<size>-<sha1>
+```
 
-### 索引管理 (index.go)
+hash 计算：
 
-- 索引文件以 JSON 格式存储，使用 codec 库进行序列化
-- 支持本地缓存和远程索引的哈希比较，避免不必要的下载
-- 索引文件命名：`meta.json.{timestamp}`，保留最近30个版本
-- 删除标记会先记录为 7 天宽限期，但真正删除不会早于对象的 180 天最低计费期
+- 小文件小于 `0xF000` 字节时计算全文件 SHA1。
+- 大文件计算开头 `0x5000` 字节、1/3 位置 `0x5000` 字节和末尾 `0x5000` 字节的 SHA1。
 
-## 操作对比表
+这是偏性能的抽样 hash，用于个人归档去重和定位，不等价于完整内容校验。
 
-### 文件块上传操作
+## 开发
 
-| 本地块映射中有 | 远程块映射中有 | 操作 |
-| --- | --- | --- |
-| 是 | 否 | 加入上传队列 |
-| 是 | 是 | 跳过（已存在） |
-| 否 | 是 | 标记为待删除（7天后） |
+```bash
+go test ./...
+```
 
-### 一致性校验操作
+项目约定：
 
-| 索引中是否有 | 云端实际是否有 | 操作 |
-| --- | --- | --- |
-| 是 | 是 | 无操作 |
-| 是 | 否 | 从索引中删除该条目 |
-| 否 | 是 | 标记为 lost_found（10年后删除） |
-
-## 开发约定
-
-- 使用 Go 标准格式化工具
-- 业务逻辑优先返回 error，由 `main.go` 统一退出
-- 并发处理使用 `errgroup`
-- 文件路径使用 path.Join 进行跨平台兼容
-- 配置项提供合理的默认值
+- Go 代码使用 `gofmt`。
+- 业务逻辑返回 error，由 `main.go` 统一处理退出。
+- 并发上传使用 `errgroup`。
+- 远端对象操作集中在 `cos.go`，索引读写集中在 `index.go`。
 
 ## 注意事项
 
-- 程序使用单实例锁，防止同时运行多个实例
-- 云端存储默认使用 DEEP_ARCHIVE 存储类别
-- 删除候选默认先标记 7 天，但实际删除不会早于 180 天最低计费期
-- 首次运行会进行全量备份
-- 索引文件存储在云端，不进行归档级别存储
+- 默认存储类型是 `DEEP_ARCHIVE`，恢复前必须先解冻。
+- 单实例锁会阻止多个非浏览/挂载动作并发运行。
+- 索引保存在标准存储中；chunk 按配置进入归档存储。
+- 如果曾经提交过真实 `config.json`，公开仓库前应清理 git history 并轮换密钥。
