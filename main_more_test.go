@@ -6,6 +6,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +22,37 @@ func TestGetLockFilePath(t *testing.T) {
 	if got := getLockFilePath(Config{}); got != "pid.lock" {
 		t.Fatalf("unexpected default lock path: %s", got)
 	}
+}
+
+func TestCreateLockFileExcludesSecondHolder(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "pid.lock")
+
+	first, err := createLockFile(p)
+	if err != nil {
+		t.Fatalf("first lock: %v", err)
+	}
+
+	if _, err := createLockFile(p); err == nil {
+		t.Fatal("expected second lock attempt to fail while first is held")
+	}
+
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read lock file: %v", err)
+	}
+	if got := strings.TrimSpace(string(raw)); got != strconv.Itoa(os.Getpid()) {
+		t.Fatalf("expected pid %d in lock file, got %q", os.Getpid(), got)
+	}
+
+	if err := first.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	second, err := createLockFile(p)
+	if err != nil {
+		t.Fatalf("re-lock after close: %v", err)
+	}
+	second.Close()
 }
 
 func TestRunActionUnknown(t *testing.T) {

@@ -7,9 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"syscall"
-
-	"github.com/allan-simon/go-singleinstance"
 )
 
 var (
@@ -26,9 +25,32 @@ var (
 	validateConfigFunc    = validateConfig
 	notifyContextFunc     = signal.NotifyContext
 	mkdirAllFunc          = os.MkdirAll
-	createLockFileFunc    = func(lockPath string) (io.Closer, error) { return singleinstance.CreateLockFile(lockPath) }
+	createLockFileFunc    = createLockFile
 	printDebugDetailsFunc = PrintDebugDetails
 )
+
+// createLockFile takes an exclusive flock on lockPath and records the owning
+// PID, so a second instance on the same state fails fast instead of racing.
+// Closing the returned file releases the lock.
+func createLockFile(lockPath string) (io.Closer, error) {
+	f, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return nil, err
+	}
+	if err := f.Truncate(0); err != nil {
+		f.Close()
+		return nil, err
+	}
+	if _, err := f.WriteString(strconv.Itoa(os.Getpid())); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
 
 func main() {
 	if err := runMain(os.Args[1:]); err != nil {

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"path"
+	"time"
 
 	"github.com/tencentyun/cos-go-sdk-v5"
-	"go.uber.org/ratelimit"
 )
 
 func classifyRestoreError(err error) error {
@@ -35,16 +35,22 @@ func restoreChunk(ctx context.Context, c *COS, config Config, cm ChunksMap) erro
 	if qps <= 0 {
 		qps = 90
 	}
-	rl := ratelimit.New(qps)
-	var errs error
+	// Restores run one at a time, so pacing is just a tick: the loop
+	// releases a request every 1/qps and waits on the context in between.
+	interval := time.Second / time.Duration(qps)
+	if interval <= 0 {
+		interval = time.Nanosecond
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
+	var errs error
 	for k := range cm {
 		select {
 		case <-ctx.Done():
 			return errors.Join(errs, ctx.Err())
-		default:
+		case <-ticker.C:
 		}
-		rl.Take()
 		p := path.Join(config.COS.ChunkPrefix, chunkPath(k))
 		err := classifyRestoreError(c.RestoreFile(ctx, p))
 		if errors.Is(err, ErrRestorePending) {
