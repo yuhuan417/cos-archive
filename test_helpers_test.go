@@ -55,21 +55,23 @@ type fakeErrorBody struct {
 }
 
 type fakeCOSServer struct {
-	t            *testing.T
-	srv          *httptest.Server
-	mu           sync.Mutex
-	objects      map[string]*fakeStoredObject
-	failures     map[string][]fakeResponseSpec
-	listPageSize int
-	requests     []string
+	t              *testing.T
+	srv            *httptest.Server
+	mu             sync.Mutex
+	objects        map[string]*fakeStoredObject
+	failures       map[string][]fakeResponseSpec
+	stickyFailures map[string]fakeResponseSpec
+	listPageSize   int
+	requests       []string
 }
 
 func newFakeCOSServer(t *testing.T) *fakeCOSServer {
 	t.Helper()
 	f := &fakeCOSServer{
-		t:        t,
-		objects:  make(map[string]*fakeStoredObject),
-		failures: make(map[string][]fakeResponseSpec),
+		t:              t,
+		objects:        make(map[string]*fakeStoredObject),
+		failures:       make(map[string][]fakeResponseSpec),
+		stickyFailures: make(map[string]fakeResponseSpec),
 	}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.srv.Close)
@@ -125,6 +127,15 @@ func (f *fakeCOSServer) addFailure(method string, key string, specs ...fakeRespo
 	f.failures[id] = append(f.failures[id], specs...)
 }
 
+// setPersistentFailure makes every matching request fail for the rest of the
+// test. The SDK retries 5xx responses on its own, so a test asserting that an
+// error surfaces must keep failing for every attempt.
+func (f *fakeCOSServer) setPersistentFailure(method string, key string, spec fakeResponseSpec) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stickyFailures[method+" "+key] = spec
+}
+
 func (f *fakeCOSServer) objectExists(key string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -178,6 +189,9 @@ func (f *fakeCOSServer) requestCount(method string, key string) int {
 
 func (f *fakeCOSServer) popFailure(method string, key string) *fakeResponseSpec {
 	id := method + " " + key
+	if spec, ok := f.stickyFailures[id]; ok {
+		return &spec
+	}
 	queue := f.failures[id]
 	if len(queue) == 0 {
 		return nil
@@ -287,8 +301,16 @@ func (f *fakeCOSServer) handleGet(w http.ResponseWriter, key string) {
 		}
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(obj.body)))
+	setCRC64Header(w, obj.body)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(obj.body)
+}
+
+// setCRC64Header mirrors the x-cos-hash-crc64ecma header real COS returns;
+// the SDK verifies downloads against it.
+func setCRC64Header(w http.ResponseWriter, body []byte) {
+	crc := crc64.Checksum(body, crc64.MakeTable(crc64.ECMA))
+	w.Header().Set("x-cos-hash-crc64ecma", strconv.FormatUint(crc, 10))
 }
 
 func (f *fakeCOSServer) handlePut(w http.ResponseWriter, r *http.Request, key string) {
@@ -306,8 +328,7 @@ func (f *fakeCOSServer) handlePut(w http.ResponseWriter, r *http.Request, key st
 	}
 	f.setObject(key, body, header)
 	w.Header().Set("ETag", "fake-etag")
-	crc := crc64.Checksum(body, crc64.MakeTable(crc64.ECMA))
-	w.Header().Set("x-cos-hash-crc64ecma", strconv.FormatUint(crc, 10))
+	setCRC64Header(w, body)
 	w.WriteHeader(http.StatusOK)
 }
 

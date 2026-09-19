@@ -198,7 +198,7 @@ func TestIndexRemoteOperations(t *testing.T) {
 		client := server.newClient(t, config.COS)
 		index := NewIndex(config, client)
 
-		server.addFailure(http.MethodGet, "meta.json.1", fakeResponseSpec{
+		server.setPersistentFailure(http.MethodGet, "meta.json.1", fakeResponseSpec{
 			status:  http.StatusInternalServerError,
 			code:    "InternalError",
 			message: "download failed",
@@ -207,7 +207,7 @@ func TestIndexRemoteOperations(t *testing.T) {
 			t.Fatal("expected downloadRemote error")
 		}
 
-		server.addFailure(http.MethodHead, "meta.json.1", fakeResponseSpec{
+		server.setPersistentFailure(http.MethodHead, "meta.json.1", fakeResponseSpec{
 			status:  http.StatusInternalServerError,
 			code:    "InternalError",
 			message: "head failed",
@@ -328,7 +328,7 @@ func TestIndexRemoteOperations(t *testing.T) {
 		server.setObject(keepPath, []byte("keep"), http.Header{
 			"Last-Modified": []string{time.Now().UTC().Format("Mon, 2 Jan 2006 15:04:05 MST")},
 		})
-		server.addFailure(http.MethodHead, failPath, fakeResponseSpec{
+		server.setPersistentFailure(http.MethodHead, failPath, fakeResponseSpec{
 			status:  http.StatusInternalServerError,
 			code:    "InternalError",
 			message: "head failed",
@@ -618,7 +618,7 @@ func TestBackupDownloadRestoreVerifyAndFsckFlows(t *testing.T) {
 			scanFailServer.setObject("meta.json.1", indexBytes, http.Header{
 				"X-Cos-Meta-Hash": []string{sha1HexBytes(indexBytes)},
 			})
-			scanFailServer.addFailure(http.MethodGet, "?max-keys=1000&prefix=data%2F", fakeResponseSpec{
+			scanFailServer.setPersistentFailure(http.MethodGet, "?max-keys=1000&prefix=data%2F", fakeResponseSpec{
 				status:  http.StatusInternalServerError,
 				code:    "InternalError",
 				message: "list fail",
@@ -659,7 +659,7 @@ func TestBackupDownloadRestoreVerifyAndFsckFlows(t *testing.T) {
 			code:    "NoSuchKey",
 			message: "missing",
 		})
-		server.addFailure(http.MethodPost, path.Join(config.COS.ChunkPrefix, chunkPath(failChunk))+"?restore", fakeResponseSpec{
+		server.setPersistentFailure(http.MethodPost, path.Join(config.COS.ChunkPrefix, chunkPath(failChunk))+"?restore", fakeResponseSpec{
 			status:  http.StatusInternalServerError,
 			code:    "InternalError",
 			message: "boom",
