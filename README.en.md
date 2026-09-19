@@ -32,7 +32,7 @@ There are still a few deliberate metadata operations: upload checks `HEAD` befor
 
 ## Build
 
-Go 1.25 or newer is required.
+Go 1.27 or newer is required.
 
 ```bash
 go build -o cos-archive

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"fmt"
 	"io"
 	"os"
@@ -51,7 +51,7 @@ func getConfig(configFileName string) (Config, error) {
 	if err != nil {
 		return config, fmt.Errorf("%w: read config file: %v", ErrConfigInvalid, err)
 	}
-	if err := json.Unmarshal(byteValue, &config); err != nil {
+	if err := jsonv2.Unmarshal(byteValue, &config, jsonv2.RejectUnknownMembers(true)); err != nil {
 		return config, fmt.Errorf("%w: parse config file: %v", ErrConfigInvalid, err)
 	}
 

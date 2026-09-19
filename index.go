@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"io"
 	"log/slog"
@@ -18,7 +20,14 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/tencentyun/cos-go-sdk-v5"
-	"github.com/ugorji/go/codec"
+)
+
+// indexJSONOpts keeps the on-disk index byte-stable across runs. The file's
+// sha1 is compared against the remote copy to decide whether an upload is
+// needed, so deterministic map ordering is load-bearing, not cosmetic.
+var indexJSONOpts = jsonv2.JoinOptions(
+	jsonv2.Deterministic(true),
+	jsontext.WithIndent("  "),
 )
 
 // Index struct
@@ -70,11 +79,7 @@ func (index *Index) Load(path string) error {
 	}
 	defer jf.Close()
 
-	jh := codec.JsonHandle{}
-	jh.ReaderBufferSize = 8192
-
-	dec := codec.NewDecoder(jf, &jh)
-	if err := dec.Decode(index); err != nil {
+	if err := jsonv2.UnmarshalRead(jf, index); err != nil {
 		slog.Debug("Load index error", "path", path, "error", err)
 		return err
 	}
@@ -93,9 +98,7 @@ func (index *Index) Save(path string) error {
 	}
 	defer w.Close()
 
-	jh := codec.JsonHandle{Indent: 2}
-	enc := codec.NewEncoder(w, &jh)
-	if err := enc.Encode(index); err != nil {
+	if err := jsonv2.MarshalWrite(w, index, indexJSONOpts); err != nil {
 		return err
 	}
 	return nil
@@ -141,11 +144,7 @@ func (index *Index) UploadRemote(ctx context.Context) error {
 	}
 	defer w.Close()
 
-	jh := codec.JsonHandle{Indent: 2}
-	h := new(codec.JsonHandle)
-	h.WriterBufferSize = 8192
-	enc := codec.NewEncoder(w, &jh)
-	if err := enc.Encode(index); err != nil {
+	if err := jsonv2.MarshalWrite(w, index, indexJSONOpts); err != nil {
 		return err
 	}
 	tmpfp := w.Name()

@@ -32,7 +32,7 @@ COS Archive 是一个面向腾讯云 COS 归档存储的文件备份工具。它
 
 ## 构建
 
-需要 Go 1.25 或更新版本。
+需要 Go 1.27 或更新版本。
 
 ```bash
 go build -o cos-archive
