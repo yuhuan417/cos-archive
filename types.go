@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"os"
 	"strconv"
 )
@@ -17,7 +19,7 @@ type DirInfo struct {
 
 // LinkInfo ...
 type LinkInfo struct {
-	LinkTo string
+	LinkTo Path
 }
 
 // FileInfo struct
@@ -28,14 +30,64 @@ type FileInfo struct {
 	Hash    HashType
 }
 
+// The three maps below are keyed by filesystem path, which on Linux is an
+// arbitrary byte string. They marshal through encodeKeys so the on-disk index
+// stays valid JSON, and hold the real bytes in memory. Being defined types
+// rather than aliases is what lets them carry those methods.
+
 // FileInfoMap struct
-type FileInfoMap = map[string]*FileInfo
+type FileInfoMap map[string]*FileInfo
+
+// MarshalJSONTo implements json.MarshalerTo.
+func (m FileInfoMap) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return jsonv2.MarshalEncode(enc, encodeKeys(map[string]*FileInfo(m)))
+}
+
+// UnmarshalJSONFrom implements json.UnmarshalerFrom.
+func (m *FileInfoMap) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	raw := map[string]*FileInfo{}
+	if err := jsonv2.UnmarshalDecode(dec, &raw); err != nil {
+		return err
+	}
+	*m = FileInfoMap(decodeKeys(raw))
+	return nil
+}
 
 // DirInfoMap struct
-type DirInfoMap = map[string]*DirInfo
+type DirInfoMap map[string]*DirInfo
+
+// MarshalJSONTo implements json.MarshalerTo.
+func (m DirInfoMap) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return jsonv2.MarshalEncode(enc, encodeKeys(map[string]*DirInfo(m)))
+}
+
+// UnmarshalJSONFrom implements json.UnmarshalerFrom.
+func (m *DirInfoMap) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	raw := map[string]*DirInfo{}
+	if err := jsonv2.UnmarshalDecode(dec, &raw); err != nil {
+		return err
+	}
+	*m = DirInfoMap(decodeKeys(raw))
+	return nil
+}
 
 // LinkInfoMap struct
-type LinkInfoMap = map[string]*LinkInfo
+type LinkInfoMap map[string]*LinkInfo
+
+// MarshalJSONTo implements json.MarshalerTo.
+func (m LinkInfoMap) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return jsonv2.MarshalEncode(enc, encodeKeys(map[string]*LinkInfo(m)))
+}
+
+// UnmarshalJSONFrom implements json.UnmarshalerFrom.
+func (m *LinkInfoMap) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	raw := map[string]*LinkInfo{}
+	if err := jsonv2.UnmarshalDecode(dec, &raw); err != nil {
+		return err
+	}
+	*m = LinkInfoMap(decodeKeys(raw))
+	return nil
+}
 
 // ChunkDeleteMarkMap struct
 type ChunkDeleteMarkMap = map[ChunkKey]int64

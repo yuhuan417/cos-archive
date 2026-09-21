@@ -7,7 +7,6 @@ import (
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -37,50 +36,6 @@ type Index struct {
 	DeletedChunks ChunkDeleteMarkMap
 	config        Config
 	cos           *COS
-	// skippedLocal collects local paths left out of the index because they
-	// cannot be represented in JSON. Not serialized.
-	skippedLocal []string
-}
-
-// unencodableNames lists every value in the index that JSON cannot represent,
-// so a marshal failure can point at the offending file instead of reporting a
-// byte offset in a 56 MiB document.
-func (index *Index) unencodableNames() []string {
-	var bad []string
-	check := func(kind string, s string) {
-		if !localNameOK(s) {
-			bad = append(bad, kind+" "+strconv.Quote(s))
-		}
-	}
-	for p := range index.Entries.Files {
-		check("file", p)
-	}
-	for p := range index.Entries.Dirs {
-		check("dir", p)
-	}
-	for p, l := range index.Entries.Links {
-		check("link", p)
-		check("link target", l.LinkTo)
-	}
-	sort.Strings(bad)
-	return bad
-}
-
-// wrapMarshalError annotates an encoder failure with the paths responsible.
-func (index *Index) wrapMarshalError(err error) error {
-	bad := index.unencodableNames()
-	if len(bad) == 0 {
-		return err
-	}
-	total := len(bad)
-	const max = 5
-	suffix := ""
-	if total > max {
-		suffix = fmt.Sprintf(" (and %d more)", total-max)
-		bad = bad[:max]
-	}
-	return fmt.Errorf("%w: %d index entr(ies) are not valid UTF-8: %s%s",
-		err, total, strings.Join(bad, "; "), suffix)
 }
 
 // NewIndex ...
@@ -133,9 +88,8 @@ func (index *Index) Load(path string) error {
 }
 
 // Save writes index to a local file. It writes to a temporary file in the same
-// directory and renames it into place, so a failure part-way through (an
-// unencodable name, a full disk) leaves any existing index intact rather than
-// truncated.
+// directory and renames it into place, so a failure part-way through (a full
+// disk, say) leaves any existing index intact rather than truncated.
 func (index *Index) Save(path string) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -150,7 +104,7 @@ func (index *Index) Save(path string) error {
 
 	if err := jsonv2.MarshalWrite(w, index, indexJSONOpts); err != nil {
 		w.Close()
-		return index.wrapMarshalError(err)
+		return err
 	}
 	if err := w.Close(); err != nil {
 		return err
@@ -203,7 +157,7 @@ func (index *Index) UploadRemote(ctx context.Context) error {
 
 	if err := jsonv2.MarshalWrite(w, index, indexJSONOpts); err != nil {
 		w.Close()
-		return index.wrapMarshalError(err)
+		return err
 	}
 	if err := w.Close(); err != nil {
 		return err

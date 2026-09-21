@@ -74,7 +74,7 @@ func TestScanSingleFileAndGenerateLocal(t *testing.T) {
 	if got := index.Entries.Dirs[keepDir]; got == nil || got.Mode != 0755 {
 		t.Fatalf("expected keep dir entry, got %#v", got)
 	}
-	if got := index.Entries.Links[linkPath]; got == nil || got.LinkTo != keepFile {
+	if got := index.Entries.Links[linkPath]; got == nil || string(got.LinkTo) != keepFile {
 		t.Fatalf("expected symlink entry, got %#v", got)
 	}
 	if _, ok := index.Entries.Dirs[skipDir]; ok {
@@ -115,7 +115,7 @@ func TestVerifySingleFileCases(t *testing.T) {
 		Size:    int64(len(content)),
 		Hash:    hash,
 	}
-	index.Entries.Links[linkPath] = &LinkInfo{LinkTo: filePath}
+	index.Entries.Links[linkPath] = &LinkInfo{LinkTo: Path(filePath)}
 
 	chunks := ChunksMap{
 		ChunkKey{size: int64(len(content)), hash: hash}: true,

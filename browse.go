@@ -139,7 +139,7 @@ func renderLink(fi *LinkInfo, p string, w http.ResponseWriter) error {
 	w.Header().Set("X-Content-Type-Options", "no-sniff")
 	return browseTemplates.ExecuteTemplate(w, "link.html", linkPageData{
 		Path:   p,
-		LinkTo: fi.LinkTo,
+		LinkTo: string(fi.LinkTo),
 	})
 }
 

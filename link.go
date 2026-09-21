@@ -25,7 +25,7 @@ func linkFiles(_ context.Context, config Config) error {
 
 	for fp, fi := range ri.Entries.Links {
 		targetPath := path.Join(linkPath, fp)
-		if err := os.Symlink(fi.LinkTo, targetPath); err != nil {
+		if err := os.Symlink(string(fi.LinkTo), targetPath); err != nil {
 			return err
 		}
 	}

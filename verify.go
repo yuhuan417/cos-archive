@@ -40,7 +40,7 @@ func verifySingleFile(path string, de fs.DirEntry, config Config, index Index, c
 			return err
 		}
 		l := LinkInfo{
-			LinkTo: link,
+			LinkTo: Path(link),
 		}
 		if fi, ok := index.Entries.Links[path]; !ok {
 			slog.Debug("Missing meta(link)", "path", path)
