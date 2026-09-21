@@ -28,7 +28,7 @@ func uploadPayload(ctx context.Context, c *COS, config Config, uploadCtx UploadC
 
 	header, err := c.GetHeader(ctx, rp)
 	if err != nil {
-		return err
+		return fmt.Errorf("head remote chunk %s (for localPath=%s): %w", rp, uploadCtx.localPath, err)
 	}
 	if header != nil {
 		slog.Debug("File already exists", "ctx", uploadCtx, "remotePath", rp)
@@ -41,7 +41,7 @@ func uploadPayload(ctx context.Context, c *COS, config Config, uploadCtx UploadC
 			slog.Debug("Local file does not exist", "ctx", uploadCtx, "error", err)
 			return nil
 		}
-		return fmt.Errorf("upload %s: %w", uploadCtx.localPath, err)
+		return fmt.Errorf("upload localPath=%s to remotePath=%s: %w", uploadCtx.localPath, rp, err)
 	}
 	slog.Debug("Uploaded file", "localPath", uploadCtx.localPath)
 	return nil
